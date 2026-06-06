@@ -45,20 +45,44 @@ export interface RunRefereeArgs {
  */
 export async function runReferee(args: RunRefereeArgs): Promise<RefereeResult> {
   const config = args.config ?? CONFIG.policy;
-  const validated = await validateIntent(args.input, args.validate);
 
   let result: RefereeResult;
   let intentHash: string | undefined;
-  if (!validated.ok) {
-    result = {
-      decision: 'REJECT',
-      severity: 'none',
-      rule_fired: 'pre_validation',
-      detail: { stage: validated.stage, code: validated.code, message: validated.message },
-    };
-  } else {
-    intentHash = validated.intent_hash;
-    result = evaluate(validated.intent, args.state, config);
+  try {
+    const validated = await validateIntent(args.input, args.validate);
+    if (!validated.ok) {
+      result = {
+        decision: 'REJECT',
+        severity: 'none',
+        rule_fired: 'pre_validation',
+        detail: { stage: validated.stage, code: validated.code, message: validated.message },
+      };
+    } else {
+      intentHash = validated.intent_hash;
+      result = evaluate(validated.intent, args.state, config);
+    }
+  } catch (err) {
+    // Fail closed: an unexpected error (a throwing signer resolver, the signature
+    // verifier, or evaluate itself) must never leave a submitted Intent with no
+    // audit record (invariant: exactly one policy_event per decision) nor be
+    // treated as a pass. Record a terminal REJECT, then re-throw so the caller
+    // does not execute. The audit write is best-effort so the original cause is
+    // preserved even if persistence is the thing that is failing.
+    try {
+      await insertPolicyEvent(args.db, {
+        intent_id: args.ids.intent_id,
+        agent_id: args.ids.agent_id,
+        round_id: args.ids.round_id,
+        rule_fired: 'internal_error',
+        decision: 'REJECT',
+        severity: 'hard',
+        detail_json: { error: err instanceof Error ? err.name : 'unknown' },
+      });
+    } catch {
+      // Swallow: audit persistence failed while handling an error; surface the
+      // original cause below rather than masking it with this secondary failure.
+    }
+    throw err;
   }
 
   await insertPolicyEvent(args.db, {

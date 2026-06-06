@@ -52,32 +52,64 @@ describe('evaluate — first failing rule decides (ordering)', () => {
     );
     expect(r.rule_fired).toBe('fresh_wallet_transfer_block');
   });
-  test('size cap fires before spend cap and before leverage cap', () => {
-    // size over cap, budget tiny, leverage over cap — size cap is first.
+  test('a HALT/REJECT blocking rule beats an earlier-tripped CLIP (drawdown vs size)', () => {
+    // Regression: an over-size trade by a drawdown-breached agent must HALT, not
+    // be clipped through. Soft clips never pre-empt a terminal decision.
     const r = evaluate(
       openIntent({ size: 50_000, leverage: 99 }),
-      cleanState({ agent: { allocation: '10', remaining_budget: '10', drawdown: '0' } }),
+      cleanState({ agent: { allocation: '100000', remaining_budget: '100000', drawdown: '0.5' } }),
       POLICY,
     );
-    expect(r.rule_fired).toBe('size_cap');
-    expect(r.decision).toBe('CLIP');
+    expect(r).toMatchObject({ decision: 'HALT', rule_fired: 'drawdown_breaker' });
   });
-  test('spend cap fires before leverage cap when size is within the per-trade cap', () => {
+  test('zero remaining budget REJECTs an over-size trade instead of clipping it', () => {
+    // Regression: size_cap must not pre-empt the spend-cap REJECT on a
+    // budget-exhausted agent.
     const r = evaluate(
-      openIntent({ size: 9000, leverage: 99 }),
-      cleanState({ agent: { allocation: '100', remaining_budget: '100', drawdown: '0' } }),
+      openIntent({ size: 50_000, leverage: 99 }),
+      cleanState({ agent: { allocation: '0', remaining_budget: '0', drawdown: '0' } }),
       POLICY,
     );
-    expect(r.rule_fired).toBe('spend_cap');
+    expect(r).toMatchObject({ decision: 'REJECT', rule_fired: 'spend_cap' });
   });
-  test('drawdown breaker fires last, only when nothing earlier did', () => {
+  test('drawdown breaker still decides when no earlier blocking rule fired', () => {
     const r = evaluate(
       openIntent({ size: 1000, leverage: 3 }),
       cleanState({ agent: { allocation: '100000', remaining_budget: '100000', drawdown: '0.5' } }),
       POLICY,
     );
-    expect(r.rule_fired).toBe('drawdown_breaker');
-    expect(r.decision).toBe('HALT');
+    expect(r).toMatchObject({ decision: 'HALT', rule_fired: 'drawdown_breaker' });
+  });
+});
+
+describe('evaluate — clips accumulate (no cap can be skipped by an earlier clip)', () => {
+  test('size + leverage both over cap → both are clamped in one CLIP', () => {
+    // Regression for the leverage-bypass: clipping size must not let an
+    // over-cap leverage through.
+    const r = evaluate(openIntent({ size: 50_000, leverage: 99 }), cleanState(), POLICY);
+    expect(r.decision).toBe('CLIP');
+    expect(r.clipped).toBe(true);
+    const m = r.modified_intent!;
+    expect(m.size).toBe('10000');
+    expect('leverage' in m && m.leverage).toBe('5');
+    expect(r.rule_fired).toContain('size_cap');
+    expect(r.rule_fired).toContain('leverage_cap');
+  });
+  test('size over per-trade cap AND over remaining budget → clamped to the smaller (budget)', () => {
+    const r = evaluate(
+      openIntent({ size: 50_000, leverage: 99 }),
+      cleanState({ agent: { allocation: '10', remaining_budget: '10', drawdown: '0' } }),
+      POLICY,
+    );
+    expect(r.decision).toBe('CLIP');
+    const m = r.modified_intent!;
+    expect(m.size).toBe('10'); // min(max_trade_size=10000, remaining=10)
+    expect('leverage' in m && m.leverage).toBe('5');
+  });
+  test('a single breached cap returns that rule verbatim (no synthetic composite)', () => {
+    const r = evaluate(openIntent({ size: 50_000 }), cleanState(), POLICY);
+    expect(r.rule_fired).toBe('size_cap');
+    expect(r.modified_intent!.size).toBe('10000');
   });
 });
 
