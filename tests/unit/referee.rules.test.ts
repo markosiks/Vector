@@ -7,7 +7,8 @@ import {
   leverageCapRule,
   marketWhitelistRule,
   sizeCapRule,
-  spendCapRule,
+  spendCapClipRule,
+  spendCapRejectRule,
   transferBlockRule,
 } from '@/lib/referee/rules';
 import type { RefereeConfig } from '@/lib/referee/types';
@@ -137,35 +138,59 @@ describe('rule 4 — per-trade size cap', () => {
   });
 });
 
-describe('rule 5 — spend cap', () => {
+describe('rule 5 — spend cap (reject branch: no budget)', () => {
   test('rejects (soft) when no budget remains', () => {
-    const r = spendCapRule(
+    const r = spendCapRejectRule(
       openIntent({ size: 100 }),
       cleanState({ agent: { allocation: '0', remaining_budget: '0', drawdown: '0' } }),
       POLICY,
     );
     expect(r).toMatchObject({ decision: 'REJECT', severity: 'soft', rule_fired: 'spend_cap' });
   });
-  test('clips (soft) to the remaining budget when size exceeds it', () => {
-    const r = spendCapRule(
-      openIntent({ size: 8000 }),
-      cleanState({ agent: { allocation: '10000', remaining_budget: '500', drawdown: '0' } }),
-      POLICY,
-    );
-    expect(r).toMatchObject({ decision: 'CLIP', severity: 'soft' });
-    expect(r!.modified_intent).toMatchObject({ size: '500' });
-  });
-  test('size equal to remaining budget is allowed (boundary)', () => {
+  test('passes when budget remains (clip branch handles over-budget)', () => {
     expect(
-      spendCapRule(
-        openIntent({ size: 500 }),
+      spendCapRejectRule(
+        openIntent({ size: 8000 }),
         cleanState({ agent: { allocation: '10000', remaining_budget: '500', drawdown: '0' } }),
         POLICY,
       ),
     ).toBeNull();
   });
   test('does not apply to transfer', () => {
-    expect(spendCapRule(transferIntent(), cleanState(), POLICY)).toBeNull();
+    expect(spendCapRejectRule(transferIntent(), cleanState(), POLICY)).toBeNull();
+  });
+});
+
+describe('rule 5 — spend cap (clip branch: over budget)', () => {
+  test('clips (soft) to the remaining budget when size exceeds it', () => {
+    const r = spendCapClipRule(
+      openIntent({ size: 8000 }),
+      cleanState({ agent: { allocation: '10000', remaining_budget: '500', drawdown: '0' } }),
+      POLICY,
+    );
+    expect(r).toMatchObject({ decision: 'CLIP', severity: 'soft', rule_fired: 'spend_cap' });
+    expect(r!.modified_intent).toMatchObject({ size: '500' });
+  });
+  test('size equal to remaining budget is allowed (boundary)', () => {
+    expect(
+      spendCapClipRule(
+        openIntent({ size: 500 }),
+        cleanState({ agent: { allocation: '10000', remaining_budget: '500', drawdown: '0' } }),
+        POLICY,
+      ),
+    ).toBeNull();
+  });
+  test('does not fire when no budget remains (reject branch owns that case)', () => {
+    expect(
+      spendCapClipRule(
+        openIntent({ size: 100 }),
+        cleanState({ agent: { allocation: '0', remaining_budget: '0', drawdown: '0' } }),
+        POLICY,
+      ),
+    ).toBeNull();
+  });
+  test('does not apply to transfer', () => {
+    expect(spendCapClipRule(transferIntent(), cleanState(), POLICY)).toBeNull();
   });
 });
 

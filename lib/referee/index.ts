@@ -7,7 +7,7 @@
 
 export { evaluate } from './evaluate';
 export { runReferee, type RefereeIds, type RunRefereeArgs } from './record';
-export { RULES } from './rules';
+export { BLOCKING_RULES, CLIPPING_RULES } from './rules';
 export type {
   AgentState,
   Decision,
