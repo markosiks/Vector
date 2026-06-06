@@ -69,6 +69,36 @@ describe('unsignedIntentSchema — required & typed fields', () => {
   });
 });
 
+describe('unsignedIntentSchema — string length bounds (pre-signature DoS guard)', () => {
+  test('rejects an over-long agent_id / market / target_address', () => {
+    expect(
+      unsignedIntentSchema.safeParse(validOpenInput({ agent_id: 'a'.repeat(129) })).success,
+    ).toBe(false);
+    expect(unsignedIntentSchema.safeParse(validOpenInput({ market: 'B'.repeat(65) })).success).toBe(
+      false,
+    );
+    expect(
+      unsignedIntentSchema.safeParse({
+        action: 'transfer',
+        agent_id: 'a',
+        size: 1,
+        target_address: '0x' + 'd'.repeat(200),
+        nonce: '1',
+        ttl: '2030-01-01T00:00:00Z',
+      }).success,
+    ).toBe(false);
+  });
+
+  test('accepts values at the maximum allowed length', () => {
+    expect(
+      unsignedIntentSchema.safeParse(validOpenInput({ agent_id: 'a'.repeat(128) })).success,
+    ).toBe(true);
+    expect(unsignedIntentSchema.safeParse(validOpenInput({ market: 'B'.repeat(64) })).success).toBe(
+      true,
+    );
+  });
+});
+
 describe('unsignedIntentSchema — conditional obligation', () => {
   test('close forbids side and leverage (not in its shape)', () => {
     expect(unsignedIntentSchema.safeParse({ ...validCloseInput(), side: 'long' }).success).toBe(
