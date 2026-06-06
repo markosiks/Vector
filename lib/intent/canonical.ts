@@ -54,6 +54,18 @@ export function normalizeDecimal(input: number | string): string {
   // Position of the decimal point within `digits`, shifted by any exponent.
   const pointPos = intDigits.length + (m[4] ? parseInt(m[4], 10) : 0);
 
+  // Guard against exponent-driven expansion: a tiny literal like "1e8000000"
+  // has few significant digits (so it slips past the digit cap above) yet would
+  // expand to millions of positional zeros below, allocating gigabytes from a
+  // handful of input bytes. This runs at schema-parse, *before* signature
+  // verification, so it is an unauthenticated amplification DoS. Bound the full
+  // positional span (leading integer + trailing fractional places) by the same
+  // precision cap, rejecting the literal deterministically instead.
+  const span = Math.max(pointPos, digits.length) - Math.min(pointPos, 0);
+  if (span > MAX_DECIMAL_DIGITS) {
+    throw new RangeError('decimal magnitude exceeds maximum precision');
+  }
+
   let intPart: string;
   let fracPart: string;
   if (pointPos <= 0) {

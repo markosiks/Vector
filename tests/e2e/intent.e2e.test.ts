@@ -108,6 +108,29 @@ describe('payload size limits', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.stage).toBe('schema');
   });
+
+  test('an exponent bomb is rejected at the schema layer in O(1) — no allocation DoS', async () => {
+    // A tiny literal whose exponent would expand to gigabytes if materialized.
+    // This is processed at the (a) schema stage, *before* any signature work, so
+    // an unauthenticated caller must not be able to hang the validator with it.
+    const bomb = {
+      action: 'open',
+      agent_id: 'agent-001',
+      market: 'BTC-PERP',
+      side: 'long',
+      size: '1e999999999',
+      leverage: '3',
+      max_slippage: '0.01',
+      nonce: '1',
+      ttl: ttlOk,
+      signature: `0x${'ab'.repeat(65)}`,
+    };
+    const started = Date.now();
+    const r = await validateIntent(bomb, opts());
+    expect(Date.now() - started).toBeLessThan(250);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.stage).toBe('schema');
+  });
 });
 
 describe('ambiguous numbers normalize before signing', () => {
