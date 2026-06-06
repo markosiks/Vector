@@ -21,6 +21,18 @@ export function getPool(): Pool {
   return pool;
 }
 
+/**
+ * Drop the cached pool so the next {@link getPool} rebuilds it. Test-only:
+ * because the pool is a process singleton, a test that primes it — with the
+ * real driver, or after `getPool().end()` — would otherwise leave a stale pool
+ * that later tests in the same process reuse, defeating their driver mocks.
+ * Closing the underlying connections stays the creator's responsibility; this
+ * only clears the cache. Not for production request paths.
+ */
+export function resetPool(): void {
+  pool = undefined;
+}
+
 /** Default upper bound on the health probe before it reports `down`. */
 const DEFAULT_PROBE_TIMEOUT_MS = 2_000;
 

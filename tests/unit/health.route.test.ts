@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
 
 import type { HealthPayload } from '@/lib/health';
 
@@ -30,13 +30,24 @@ mock.module('@neondatabase/serverless', () => ({
 }));
 
 let GET: () => Promise<Response>;
+let resetPool: () => void;
 
 beforeAll(async () => {
+  // The Neon pool is a process singleton: a prior test file may have primed (or
+  // ended) it with the real driver, which would defeat the mock above. Drop it
+  // so `checkDb` rebuilds a pool from the mocked driver on the first request.
+  ({ resetPool } = await import('@/lib/db/client'));
+  resetPool();
   ({ GET } = await import('@/app/api/health/route'));
 });
 
 afterEach(() => {
   queryBehavior = async () => ({ rows: [{ result: 1 }] });
+});
+
+afterAll(() => {
+  // Don't leak this file's mocked pool to later test files in the same process.
+  resetPool();
 });
 
 describe('GET /api/health', () => {
