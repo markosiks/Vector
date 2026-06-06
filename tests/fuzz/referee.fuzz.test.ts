@@ -143,14 +143,25 @@ describe('referee fuzz — domain & severity invariants', () => {
         }
       }
 
-      // monotone CLIP: post-clip value never exceeds the cap
+      // Clip integrity: a CLIP result must satisfy *every* cap, not just the one
+      // that happened to fire. This is the regression guard for the clip-ordering
+      // bypass — clipping one field must never leave another cap breached.
       if (res.decision === 'CLIP' && res.modified_intent) {
-        if (res.rule_fired === 'size_cap') {
-          expect(compareDecimal(res.modified_intent.size, POLICY.max_trade_size) <= 0).toBe(true);
+        const m = res.modified_intent;
+        // size is bounded by both the per-trade cap and the remaining budget
+        expect(compareDecimal(m.size, POLICY.max_trade_size) <= 0).toBe(true);
+        expect(compareDecimal(m.size, state.agent.remaining_budget) <= 0).toBe(true);
+        // leverage is bounded by the leverage cap
+        if ('leverage' in m) {
+          expect(compareDecimal(m.leverage, POLICY.max_leverage) <= 0).toBe(true);
         }
-        if (res.rule_fired === 'leverage_cap' && 'leverage' in res.modified_intent) {
-          expect(compareDecimal(res.modified_intent.leverage, POLICY.max_leverage) <= 0).toBe(true);
-        }
+      }
+
+      // A CLIP can only happen when no blocking rule fired: so a CLIP implies
+      // the agent is not drawdown-breached and has budget left.
+      if (res.decision === 'CLIP') {
+        expect(compareDecimal(state.agent.drawdown, POLICY.dd_breaker) < 0).toBe(true);
+        expect(compareDecimal(state.agent.remaining_budget, 0) > 0).toBe(true);
       }
 
       // idempotency / determinism
