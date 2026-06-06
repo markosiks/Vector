@@ -1,0 +1,362 @@
+[
+  {
+    "name": "new_clean_strong_roc",
+    "inputs": {
+      "pnl_r": 500,
+      "car_r": 10000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 20,
+    "expected": {
+      "raw_r": "85.07246163",
+      "score_r": "46.029",
+      "crashed": false,
+      "components": {
+        "perf": 0.88079708,
+        "w": 0.90909091,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "new_clean_zero_roc_small_car",
+    "inputs": {
+      "pnl_r": 0,
+      "car_r": 50,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 20,
+    "expected": {
+      "raw_r": "7.38095238",
+      "score_r": "14.952",
+      "crashed": false,
+      "components": {
+        "perf": 0.5,
+        "w": 0.04761905,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "new_clean_zero_roc_big_car",
+    "inputs": {
+      "pnl_r": 0,
+      "car_r": 100000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 20,
+    "expected": {
+      "raw_r": "54.50495050",
+      "score_r": "33.802",
+      "crashed": false,
+      "components": {
+        "perf": 0.5,
+        "w": 0.99009901,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "one_hard_strong_perf",
+    "inputs": {
+      "pnl_r": 2000,
+      "car_r": 50000,
+      "soft": 0,
+      "hard": 1,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 80,
+    "expected": {
+      "raw_r": "41.57042992",
+      "score_r": "64.628",
+      "crashed": false,
+      "components": {
+        "perf": 0.83201839,
+        "w": 0.98039216,
+        "policy": -40,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "halt_crash",
+    "inputs": {
+      "pnl_r": 1000,
+      "car_r": 50000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 1,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 90,
+    "expected": {
+      "raw_r": "12.64455697",
+      "score_r": "7.000",
+      "crashed": true,
+      "components": {
+        "perf": 0.68997448,
+        "w": 0.98039216,
+        "policy": -55,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "drain_crash",
+    "inputs": {
+      "pnl_r": 0,
+      "car_r": 50000,
+      "soft": 0,
+      "hard": 1,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": true
+    },
+    "prev": 90,
+    "expected": {
+      "raw_r": "9.01960784",
+      "score_r": "7.000",
+      "crashed": true,
+      "components": {
+        "perf": 0.5,
+        "w": 0.98039216,
+        "policy": -40,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "high_drawdown_clean",
+    "inputs": {
+      "pnl_r": 100,
+      "car_r": 10000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0.9,
+      "drain_r": false
+    },
+    "prev": 50,
+    "expected": {
+      "raw_r": "44.42615092",
+      "score_r": "47.770",
+      "crashed": false,
+      "components": {
+        "perf": 0.59868766,
+        "w": 0.90909091,
+        "policy": 5,
+        "dd": 15
+      }
+    }
+  },
+  {
+    "name": "negative_pnl_clean",
+    "inputs": {
+      "pnl_r": -3000,
+      "car_r": 20000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0.2,
+      "drain_r": false
+    },
+    "prev": 40,
+    "expected": {
+      "raw_r": "4.23548792",
+      "score_r": "25.694",
+      "crashed": false,
+      "components": {
+        "perf": 0.00247262,
+        "w": 0.95238095,
+        "policy": 5,
+        "dd": 1
+      }
+    }
+  },
+  {
+    "name": "extreme_pos_roc_saturation",
+    "inputs": {
+      "pnl_r": 1000000000,
+      "car_r": 10000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 60,
+    "expected": {
+      "raw_r": "95.90909091",
+      "score_r": "74.364",
+      "crashed": false,
+      "components": {
+        "perf": 1,
+        "w": 0.90909091,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "extreme_neg_roc_saturation",
+    "inputs": {
+      "pnl_r": -1000000000,
+      "car_r": 10000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 60,
+    "expected": {
+      "raw_r": "5.00000000",
+      "score_r": "38.000",
+      "crashed": false,
+      "components": {
+        "perf": 0,
+        "w": 0.90909091,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "three_softs_clean",
+    "inputs": {
+      "pnl_r": 800,
+      "car_r": 30000,
+      "soft": 3,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 55,
+    "expected": {
+      "raw_r": "67.99637013",
+      "score_r": "60.199",
+      "crashed": false,
+      "components": {
+        "perf": 0.74396249,
+        "w": 0.96774194,
+        "policy": -4,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "established_one_hard",
+    "inputs": {
+      "pnl_r": 1500,
+      "car_r": 40000,
+      "soft": 0,
+      "hard": 1,
+      "halt": 0,
+      "dd_r": 0.1,
+      "drain_r": false
+    },
+    "prev": 75,
+    "expected": {
+      "raw_r": "39.76336353",
+      "score_r": "60.905",
+      "crashed": false,
+      "components": {
+        "perf": 0.81757448,
+        "w": 0.97560976,
+        "policy": -40,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "sybil_whole",
+    "inputs": {
+      "pnl_r": 1000,
+      "car_r": 90000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 20,
+    "expected": {
+      "raw_r": "65.26217447",
+      "score_r": "38.105",
+      "crashed": false,
+      "components": {
+        "perf": 0.60931754,
+        "w": 0.98901099,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "sybil_split_each",
+    "inputs": {
+      "pnl_r": 333.3333333,
+      "car_r": 30000,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 20,
+    "expected": {
+      "raw_r": "63.96621373",
+      "score_r": "37.586",
+      "crashed": false,
+      "components": {
+        "perf": 0.60931754,
+        "w": 0.96774194,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  },
+  {
+    "name": "car_zero_division_guard",
+    "inputs": {
+      "pnl_r": 5,
+      "car_r": 0,
+      "soft": 0,
+      "hard": 0,
+      "halt": 0,
+      "dd_r": 0,
+      "drain_r": false
+    },
+    "prev": 20,
+    "expected": {
+      "raw_r": "5.00000000",
+      "score_r": "14.000",
+      "crashed": false,
+      "components": {
+        "perf": 1,
+        "w": 0,
+        "policy": 5,
+        "dd": 0
+      }
+    }
+  }
+]

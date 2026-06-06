@@ -47,7 +47,9 @@ export function listOutcomesByAgentRound(
 ): Promise<OutcomeRow[]> {
   return selectMany(
     db,
-    'SELECT * FROM outcomes WHERE agent_id = $1 AND round_id = $2 ORDER BY created_at ASC',
+    // `id` tiebreaker keeps the float-summation order in `deriveScoreInputs`
+    // deterministic when two outcomes share a `created_at` tick (§6.5).
+    'SELECT * FROM outcomes WHERE agent_id = $1 AND round_id = $2 ORDER BY created_at ASC, id ASC',
     [agentId, roundId],
     outcomeRow,
   );
