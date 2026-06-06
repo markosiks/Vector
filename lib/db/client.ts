@@ -17,7 +17,21 @@ let pool: Pool | undefined;
 
 /** Lazily create and return the shared Neon connection pool. */
 export function getPool(): Pool {
-  pool ??= new Pool({ connectionString: ENV.DATABASE_URL });
+  if (pool === undefined) {
+    const created = new Pool({ connectionString: ENV.DATABASE_URL });
+    // An idle pooled client can fail asynchronously when the backend drops the
+    // connection — Neon closes idle connections aggressively. node-postgres
+    // surfaces that as a pool `'error'` event; with no listener the EventEmitter
+    // rethrows and takes down the whole process, turning a routine idle-conn
+    // reset into an outage of a long-running server. Swallow it: the pool has
+    // already retired the dead client, and the next `connect()` transparently
+    // opens a fresh one. Log only `err.name` — the error object can carry the
+    // connection string, which must never be logged.
+    created.on('error', (err: Error) => {
+      console.error(`[db] idle pool client error: ${err.name}`);
+    });
+    pool = created;
+  }
   return pool;
 }
 
@@ -64,9 +78,22 @@ export async function checkDb(timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS): Pro
   const probe: Promise<DbState> = (async (): Promise<DbState> => {
     const client = await getPool().connect();
     try {
-      await client.query("SELECT set_config('statement_timeout', $1, false)", [String(boundMs)]);
-      await client.query('SELECT 1');
-      return 'up';
+      // Bound the probe server-side, but scope the timeout to a transaction
+      // (`set_config(..., is_local = true)`) so it is discarded on COMMIT and
+      // never leaks onto the pooled connection. A session-level
+      // `set_config(..., false)` would persist after `release()` and silently
+      // cancel an unrelated later query that reuses this connection at `boundMs`.
+      // `set_config` is parameterized (unlike `SET`, which cannot bind `$n`).
+      await client.query('BEGIN');
+      try {
+        await client.query("SELECT set_config('statement_timeout', $1, true)", [String(boundMs)]);
+        await client.query('SELECT 1');
+        await client.query('COMMIT');
+        return 'up';
+      } catch (err) {
+        await client.query('ROLLBACK').catch((): void => undefined);
+        throw err;
+      }
     } finally {
       client.release();
     }

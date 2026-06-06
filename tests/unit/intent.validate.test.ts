@@ -145,6 +145,36 @@ describe('validateIntent — ordered failures (first failing check decides)', ()
     expect((await mk({ max_slippage: '0.5' })).ok).toBe(true);
   });
 
+  test('(e) bounds: a finer fractional scale than the column can store is rejected (silent-rounding guard)', async () => {
+    const mk = async (over: Record<string, unknown>) => {
+      const signed = await signIntent(validOpenInput({ ttl: ttlAfterNow, ...over }), TEST_PK);
+      return validateIntent(signed, baseOpts());
+    };
+    // size/tp/sl are numeric(38, 18): a 19th fraction digit would be silently
+    // rounded on INSERT, diverging the stored row from the signed bytes.
+    expectFail(await mk({ size: '1.' + '0'.repeat(18) + '1' }), 'bounds', 'size_scale'); // 19 frac
+    expectFail(await mk({ tp: '1.' + '0'.repeat(18) + '1' }), 'bounds', 'tp_scale');
+    expectFail(await mk({ sl: '1.' + '0'.repeat(18) + '1' }), 'bounds', 'sl_scale');
+    // leverage/max_slippage are numeric(12, 6): a 7th fraction digit is rejected.
+    expectFail(await mk({ leverage: '1.0000001' }), 'bounds', 'leverage_scale'); // 7 frac
+    expectFail(await mk({ max_slippage: '0.0000001' }), 'bounds', 'slippage_scale'); // 7 frac, in [0,1]
+  });
+
+  test('(e) bounds: large magnitudes pass the gate — the firewall clips them, the gate does not reject', async () => {
+    const mk = async (over: Record<string, unknown>) => {
+      const signed = await signIntent(validOpenInput({ ttl: ttlAfterNow, ...over }), TEST_PK);
+      return validateIntent(signed, baseOpts());
+    };
+    // An astronomically large size/leverage is the firewall's job to CLIP (§6.5),
+    // not the gate's to hard-reject; only the fractional scale is bounded here.
+    expect((await mk({ size: '9'.repeat(26) })).ok).toBe(true); // 26 integer digits
+    expect((await mk({ leverage: '1000000' })).ok).toBe(true); // 7 integer digits
+    // Values exactly at the storable scale are accepted.
+    expect((await mk({ size: '9'.repeat(20) + '.' + '9'.repeat(18) })).ok).toBe(true);
+    expect((await mk({ leverage: '999999.999999' })).ok).toBe(true); // numeric(12, 6)
+    expect((await mk({ max_slippage: '0.999999' })).ok).toBe(true);
+  });
+
   test('(e) before (f): a bad size beats a target_address violation', async () => {
     const signed = await signIntent(
       validOpenInput({ ttl: ttlAfterNow, size: -1, target_address: '0xabc' }),

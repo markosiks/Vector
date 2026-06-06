@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import { buildInsert } from '../sql';
+import { buildInsert, type InsertOptions } from '../sql';
 import type { Queryable } from '../types';
 
 /**
@@ -38,19 +38,36 @@ export function num(value: NumericInput): string {
   return value.toString();
 }
 
-/** Insert one row and return it parsed through `schema`. */
+/**
+ * Insert one row and return it parsed through `schema`, or `null` when the
+ * statement returned no row — which, with `options.onConflictDoNothing`, means a
+ * conflicting row already existed (an idempotent reservation lost the race).
+ */
+export async function insertOneOrNull<S extends z.ZodTypeAny>(
+  db: Queryable,
+  table: string,
+  values: Record<string, unknown>,
+  schema: S,
+  options?: InsertOptions,
+): Promise<z.infer<S> | null> {
+  const { text, params } = buildInsert(table, values, options);
+  const { rows } = await db.query(text, params);
+  const first = rows[0];
+  return first === undefined ? null : schema.parse(first);
+}
+
+/** Insert one row and return it parsed through `schema`. Throws if no row is returned. */
 export async function insertOne<S extends z.ZodTypeAny>(
   db: Queryable,
   table: string,
   values: Record<string, unknown>,
   schema: S,
 ): Promise<z.infer<S>> {
-  const { text, params } = buildInsert(table, values);
-  const { rows } = await db.query(text, params);
-  if (rows.length === 0) {
+  const row = await insertOneOrNull(db, table, values, schema);
+  if (row === null) {
     throw new Error(`insert into ${table} returned no row`);
   }
-  return schema.parse(rows[0]);
+  return row;
 }
 
 /** Run a parameterized query and parse each row through `schema`. */
