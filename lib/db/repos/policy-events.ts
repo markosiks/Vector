@@ -44,3 +44,21 @@ export function listRecentPolicyEvents(db: Queryable, limit = 100): Promise<Poli
     policyEventRow,
   );
 }
+
+/**
+ * All policy events for one agent in one round, oldest first. The scoring
+ * engine reduces these into per-severity violation counts and the `drain_r`
+ * flag (rule #3, `fresh_wallet_transfer_block`).
+ */
+export function listPolicyEventsByAgentRound(
+  db: Queryable,
+  agentId: string,
+  roundId: string,
+): Promise<PolicyEventRow[]> {
+  return selectMany(
+    db,
+    'SELECT * FROM policy_events WHERE agent_id = $1 AND round_id = $2 ORDER BY created_at ASC',
+    [agentId, roundId],
+    policyEventRow,
+  );
+}
