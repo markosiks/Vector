@@ -65,6 +65,20 @@ describe('normalizeDecimal', () => {
   test('rejects literals beyond the precision cap', () => {
     expect(() => normalizeDecimal('1'.repeat(81))).toThrow();
   });
+
+  test('rejects exponent-driven expansion without allocating (DoS guard)', () => {
+    // A handful of input bytes must never expand to a multi-MB string. The
+    // check is bound-then-reject, so each call returns in O(1), not O(10^exp).
+    for (const bomb of ['1e8000000', '1e-8000000', '1e999999999', '1e-999999999']) {
+      const started = Date.now();
+      expect(() => normalizeDecimal(bomb)).toThrow(/maximum precision/);
+      expect(Date.now() - started).toBeLessThan(100);
+    }
+    // The magnitude cap is at the same boundary as the digit cap: 1e79 is the
+    // largest power of ten that fits, 1e80 does not.
+    expect(normalizeDecimal('1e79')).toBe('1' + '0'.repeat(79));
+    expect(() => normalizeDecimal('1e80')).toThrow(/maximum precision/);
+  });
 });
 
 describe('normalizeNonce', () => {
