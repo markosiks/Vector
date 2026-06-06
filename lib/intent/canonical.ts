@@ -88,6 +88,49 @@ export function normalizeDecimal(input: number | string): string {
 }
 
 /**
+ * Compare two decimals by value, exactly and without ever touching a float.
+ *
+ * Inputs may be numbers or strings; each is run through {@link normalizeDecimal}
+ * first, so a caller can compare a config literal (`max_trade_size: 10_000`)
+ * against a signed Intent's canonical decimal string (`"10000.0000001"`) and get
+ * the right answer at full precision — a `Number()` round-trip would collapse
+ * that excess and admit a value strictly over the cap. Returns `-1`, `0`, or `1`
+ * for `a < b`, `a === b`, `a > b`.
+ *
+ * Relies on the canonical form's guarantees (single `0`, no leading integer
+ * zeros, no trailing fraction zeros, leading `-` only for negatives) so integer
+ * magnitudes compare first by digit count, then lexicographically.
+ */
+export function compareDecimal(a: number | string, b: number | string): -1 | 0 | 1 {
+  const na = normalizeDecimal(a);
+  const nb = normalizeDecimal(b);
+  if (na === nb) return 0;
+  const aNeg = na.startsWith('-');
+  const bNeg = nb.startsWith('-');
+  if (aNeg !== bNeg) return aNeg ? -1 : 1;
+  const mag = compareMagnitude(aNeg ? na.slice(1) : na, bNeg ? nb.slice(1) : nb);
+  return aNeg ? ((mag * -1) as -1 | 0 | 1) : mag;
+}
+
+/** Compare two non-negative canonical decimal strings by magnitude. */
+function compareMagnitude(a: string, b: string): -1 | 0 | 1 {
+  const aDot = a.indexOf('.');
+  const bDot = b.indexOf('.');
+  const aInt = aDot === -1 ? a : a.slice(0, aDot);
+  const bInt = bDot === -1 ? b : b.slice(0, bDot);
+  // Canonical integer parts carry no leading zeros, so more digits ⇒ larger.
+  if (aInt.length !== bInt.length) return aInt.length < bInt.length ? -1 : 1;
+  if (aInt !== bInt) return aInt < bInt ? -1 : 1;
+  const aFrac = aDot === -1 ? '' : a.slice(aDot + 1);
+  const bFrac = bDot === -1 ? '' : b.slice(bDot + 1);
+  const width = Math.max(aFrac.length, bFrac.length);
+  const aPad = aFrac.padEnd(width, '0');
+  const bPad = bFrac.padEnd(width, '0');
+  if (aPad === bPad) return 0;
+  return aPad < bPad ? -1 : 1;
+}
+
+/**
  * Normalize a string/integer nonce to its canonical string form.
  *
  * A numeric nonce must be a *safe* integer: beyond `Number.MAX_SAFE_INTEGER` a
