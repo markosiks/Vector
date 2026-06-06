@@ -128,8 +128,21 @@ describe('validateIntent — ordered failures (first failing check decides)', ()
     expectFail(await mk({ leverage: 0 }), 'bounds', 'nonpositive_leverage');
     expectFail(await mk({ max_slippage: 1.5 }), 'bounds', 'slippage_out_of_range');
     expectFail(await mk({ max_slippage: -0.1 }), 'bounds', 'slippage_out_of_range');
+    // A value strictly above 1 that a float comparison would round down to 1
+    // must still be rejected — the gate compares the canonical string, not a double.
+    expectFail(await mk({ max_slippage: '1.0000000000000001' }), 'bounds', 'slippage_out_of_range');
     expectFail(await mk({ tp: 0 }), 'bounds', 'nonpositive_tp');
     expectFail(await mk({ sl: -1 }), 'bounds', 'nonpositive_sl');
+  });
+
+  test('(e) bounds: max_slippage boundary values 0 and 1 are accepted', async () => {
+    const mk = async (over: Record<string, unknown>) => {
+      const signed = await signIntent(validOpenInput({ ttl: ttlAfterNow, ...over }), TEST_PK);
+      return validateIntent(signed, baseOpts());
+    };
+    expect((await mk({ max_slippage: 0 })).ok).toBe(true);
+    expect((await mk({ max_slippage: 1 })).ok).toBe(true);
+    expect((await mk({ max_slippage: '0.5' })).ok).toBe(true);
   });
 
   test('(e) before (f): a bad size beats a target_address violation', async () => {

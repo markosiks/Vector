@@ -87,19 +87,50 @@ export function normalizeDecimal(input: number | string): string {
   return /^0(\.0*)?$/.test(out) ? '0' : sign + out;
 }
 
-/** Normalize a string/integer nonce to its canonical string form. */
+/**
+ * Normalize a string/integer nonce to its canonical string form.
+ *
+ * A numeric nonce must be a *safe* integer: beyond `Number.MAX_SAFE_INTEGER` a
+ * JSON number has already lost precision before it reaches us, so two distinct
+ * large nonces can collapse to the same canonical string (e.g. `2^53+1` →
+ * `"9007199254740992"`) and alias each other in the anti-replay key, wrongly
+ * rejecting a legitimate Intent as a replay. Such values are rejected so callers
+ * use a string nonce for large/opaque values.
+ */
 export function normalizeNonce(nonce: string | number): string {
   if (typeof nonce === 'number') {
     if (!Number.isInteger(nonce)) throw new RangeError('numeric nonce must be an integer');
+    if (!Number.isSafeInteger(nonce)) {
+      throw new RangeError('numeric nonce exceeds safe-integer range; use a string nonce');
+    }
     return String(nonce);
   }
   if (nonce.length === 0) throw new RangeError('nonce must not be empty');
   return nonce;
 }
 
-/** Normalize an ISO-8601 string or epoch-ms number to ISO-8601 UTC. */
+/**
+ * Strict ISO-8601 *instant* with a mandatory timezone designator (`Z` or
+ * `±HH:MM`/`±HHMM`). A timezone-less datetime is deliberately rejected: per
+ * ECMA-262 `new Date("2030-01-01T00:00:00")` is interpreted in the host's local
+ * zone, so `toISOString()` would yield host-dependent bytes and break the
+ * byte-for-byte reproducibility the canonical payload exists to guarantee.
+ */
+const ISO_8601_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/;
+
+/**
+ * Normalize a timestamp to ISO-8601 UTC. A `number` is treated as epoch
+ * milliseconds; a `string` must be a strict ISO-8601 instant carrying an
+ * explicit timezone (see {@link ISO_8601_INSTANT_RE}). Lenient,
+ * implementation-defined `Date` parsing of arbitrary strings (locale dates, bare
+ * years, timezone-less datetimes) is rejected so the result is deterministic and
+ * identical across hosts and runtimes.
+ */
 export function normalizeTimestamp(ttl: string | number): string {
-  const date = typeof ttl === 'number' ? new Date(ttl) : new Date(ttl);
+  if (typeof ttl === 'string' && !ISO_8601_INSTANT_RE.test(ttl)) {
+    throw new RangeError(`timestamp must be ISO-8601 with a timezone: ${JSON.stringify(ttl)}`);
+  }
+  const date = new Date(ttl);
   const ms = date.getTime();
   if (!Number.isFinite(ms)) throw new RangeError(`invalid timestamp: ${JSON.stringify(ttl)}`);
   return date.toISOString();
