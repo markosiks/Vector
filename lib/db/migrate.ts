@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -52,6 +53,12 @@ export function loadMigrations(dir: string): Migration[] {
     if (!match) continue;
     const [, version, name, kind] = match as unknown as [string, string, string, 'up' | 'down'];
     const entry = halves.get(version) ?? { name };
+    if (entry[kind] !== undefined) {
+      // Two files claim the same version+direction (e.g. a stray rename). Fail
+      // loudly here rather than letting readdir order silently pick a winner —
+      // a malformed set must throw before any SQL runs.
+      throw new Error(`duplicate ${kind} migration for version ${version}`);
+    }
     entry[kind] = readFileSync(join(dir, file), 'utf8');
     halves.set(version, entry);
   }
@@ -144,8 +151,39 @@ export async function applyMigration(
     }
     await db.query('COMMIT');
   } catch (err) {
-    await db.query('ROLLBACK');
+    try {
+      await db.query('ROLLBACK');
+    } catch {
+      // A ROLLBACK that itself fails (e.g. the connection dropped) must not
+      // mask the original migration error — that is the real root cause worth
+      // surfacing. The transaction is aborted regardless when the session ends.
+    }
     throw err;
+  }
+}
+
+/**
+ * Guard against running migrations over a transaction-pooled connection (e.g.
+ * Neon's `-pooler` endpoint / PgBouncer transaction mode). There, session state
+ * does not survive across statements, so the two session-scoped guarantees this
+ * runner depends on — the `pg_advisory_lock` mutex and `SET search_path` —
+ * silently no-op: migrations would no longer be serialized and DDL could land
+ * in the wrong schema. We set a session GUC and read it back on a *separate*
+ * statement; on a pooled endpoint the read lands on a different backend and the
+ * value is gone, so we fail closed before taking the lock or running any DDL.
+ */
+export async function assertSessionConnection(db: Queryable): Promise<void> {
+  const token = `vec_migrate_${randomUUID()}`;
+  await db.query('SELECT set_config($1, $2, false)', ['application_name', token]);
+  const { rows } = await db.query<{ v: string }>('SELECT current_setting($1) AS v', [
+    'application_name',
+  ]);
+  if (rows[0]?.v !== token) {
+    throw new Error(
+      'migrations require a direct (session) database connection, but the configured ' +
+        'endpoint did not preserve session state across statements (transaction pooling ' +
+        'detected). Use the direct, non-pooled connection string for migrations.',
+    );
   }
 }
 
@@ -170,6 +208,7 @@ export async function migrate(
 ): Promise<MigrationResult> {
   const client = await pool.connect();
   try {
+    await assertSessionConnection(client as unknown as Queryable);
     if (opts.searchPath !== undefined) {
       await client.query(`SET search_path TO ${assertIdent(opts.searchPath)}, public`);
     }
@@ -190,6 +229,9 @@ export async function migrate(
   } finally {
     try {
       await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY.toString()]);
+    } catch {
+      // A failed unlock must not turn an already-committed migration into a
+      // thrown error: the lock is released when the session ends anyway.
     } finally {
       client.release();
     }
