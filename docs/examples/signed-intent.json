@@ -1,0 +1,18 @@
+{
+  "_comment": "Canonical example of a signed Vector Intent (architecture.txt §8.2). Signer is Anvil account #0 (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266). The signature is an EIP-191 personal_sign over the canonical payload; intent_hash = keccak256(canonical payload). See docs/intent-contract.md.",
+  "intent": {
+    "action": "open",
+    "agent_id": "agent-001",
+    "market": "BTC-PERP",
+    "side": "long",
+    "size": "1000",
+    "leverage": "3",
+    "max_slippage": "0.01",
+    "nonce": "42",
+    "ttl": "2030-01-01T00:00:00.000Z",
+    "signature": "0xbf8882aabc1712ff651c635a63719c4609be5150e1fb7b35649d7929a78ef38708bb532490ef3a651878f07ae18dc0d4c4c23520749db5c31385e2d0352c5b5f1c"
+  },
+  "canonical_payload": "{\"action\":\"open\",\"agent_id\":\"agent-001\",\"leverage\":\"3\",\"market\":\"BTC-PERP\",\"max_slippage\":\"0.01\",\"nonce\":\"42\",\"side\":\"long\",\"size\":\"1000\",\"ttl\":\"2030-01-01T00:00:00.000Z\"}",
+  "intent_hash": "0x85ce2b999baf6548cfe141072013e077a79c2314a115750bcac77e7a8b4fee1f",
+  "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+}
