@@ -20,6 +20,7 @@ export { isTradeAction } from './types';
 
 export {
   canonicalPayload,
+  compareDecimal,
   intentHash,
   normalizeDecimal,
   normalizeNonce,
