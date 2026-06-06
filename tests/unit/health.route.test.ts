@@ -17,9 +17,14 @@ process.env.DATABASE_URL = 'postgresql://user:pass@host.neon.tech/db?sslmode=req
 
 mock.module('server-only', () => ({}));
 mock.module('@neondatabase/serverless', () => ({
+  // checkDb probes on a dedicated pooled client (connect → query → release),
+  // so the fake models that shape; `queryBehavior` drives every client query.
   Pool: class {
-    query(): Promise<unknown> {
-      return queryBehavior();
+    async connect(): Promise<{ query: () => Promise<unknown>; release: () => void }> {
+      return {
+        query: (): Promise<unknown> => queryBehavior(),
+        release: (): void => undefined,
+      };
     }
   },
 }));
