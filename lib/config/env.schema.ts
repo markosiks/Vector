@@ -1,0 +1,110 @@
+import { z } from 'zod';
+
+/**
+ * Environment schema + pure parser for Vector.
+ *
+ * This module is deliberately side-effect free and contains **no** `server-only`
+ * guard, so it can be unit/fuzz tested directly. The eager, server-only entry
+ * point that reads `process.env` lives in `env.ts`.
+ *
+ * Security invariants:
+ * - Required variables are validated; a missing or malformed one is a
+ *   deterministic rejection, never a silent default.
+ * - Error messages reference variable **names and reasons only** — never the
+ *   offending value — so secrets can never leak into logs.
+ */
+
+/** Upper bound on any single connection/URL value; rejects pathological input. */
+const MAX_URL_LEN = 4_096;
+
+const postgresUrl = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_URL_LEN)
+  .refine(
+    (value) => {
+      try {
+        const { protocol } = new URL(value);
+        return protocol === 'postgres:' || protocol === 'postgresql:';
+      } catch {
+        return false;
+      }
+    },
+    { message: 'must be a postgres:// or postgresql:// connection string' },
+  );
+
+const rpcUrl = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_URL_LEN)
+  .refine(
+    (value) => {
+      try {
+        const { protocol } = new URL(value);
+        return (
+          protocol === 'http:' || protocol === 'https:' || protocol === 'ws:' || protocol === 'wss:'
+        );
+      } catch {
+        return false;
+      }
+    },
+    { message: 'must be an http(s) or ws(s) URL' },
+  );
+
+/** A non-empty secret string with a sane length bound. */
+const secret = z.string().trim().min(1).max(MAX_URL_LEN);
+
+/**
+ * The environment schema. Only `DATABASE_URL` is required at P0.1 (the health
+ * check needs it). Chain/signal/operator values are validated **if present** so
+ * a malformed value fails fast, but they remain optional until their stage.
+ */
+export const envSchema = z.object({
+  /** Neon Postgres connection string. Required. */
+  DATABASE_URL: postgresUrl,
+  /** Mantle testnet RPC URL. Optional until on-chain stages; validated if set. */
+  MANTLE_TESTNET_RPC_URL: rpcUrl.optional(),
+  /** Nansen API key (P2.2). Secret. Optional until its stage. */
+  NANSEN_API_KEY: secret.optional(),
+  /** Elfa API key (P3.1). Secret. Optional until its stage. */
+  ELFA_API_KEY: secret.optional(),
+  /** Operator key used for attestation writes. Secret. Optional until its stage. */
+  OPERATOR_PRIVATE_KEY: secret.optional(),
+  /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
+  GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
+});
+
+/** The validated environment shape. */
+export type Env = z.infer<typeof envSchema>;
+
+/** Thrown when env validation fails. Message lists names + reasons, never values. */
+export class EnvValidationError extends Error {
+  public readonly issues: readonly string[];
+
+  constructor(issues: readonly string[]) {
+    super(`Invalid environment configuration:\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+    this.name = 'EnvValidationError';
+    this.issues = issues;
+  }
+}
+
+/**
+ * Validate an environment source. Returns the typed env on success; throws
+ * {@link EnvValidationError} with a redacted, human-readable summary on failure.
+ *
+ * @param source A map of env variables, e.g. `process.env`.
+ */
+export function parseEnv(source: Record<string, string | undefined>): Env {
+  const result = envSchema.safeParse(source);
+  if (result.success) {
+    return result.data;
+  }
+
+  const issues = result.error.issues.map((issue) => {
+    const name = issue.path.join('.') || '(root)';
+    return `${name}: ${issue.message}`;
+  });
+  throw new EnvValidationError(issues);
+}
