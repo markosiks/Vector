@@ -146,8 +146,7 @@ temp/
 # docs will be ignored. Prefer ignoring only GENERATED docs instead, e.g.:
 #   docs/_generated/
 #   docs/api/
-# Uncomment the broad rule only if docs/ is fully auto-generated:
-docs/
+# Ignore only GENERATED docs; handwritten docs/*.md are committed deliverables.
 docs/_generated/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
