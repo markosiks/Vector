@@ -32,21 +32,36 @@ const DEFAULT_PROBE_TIMEOUT_MS = 2_000;
  * timeout — collapses to `'down'`. It never throws and never logs the
  * connection string or any secret, so callers can treat the result as a total
  * function.
+ *
+ * The probe runs on its own pooled client which is **always** released, and the
+ * query is bounded server-side by `statement_timeout`. Without that bound the
+ * wall-clock race below would report `'down'` while the underlying `SELECT 1`
+ * kept holding its connection until an OS-level TCP timeout — so a slow/hung
+ * backend, hit repeatedly through the unauthenticated `/api/health` endpoint,
+ * could pin every connection in the shared pool and turn a transient DB blip
+ * into a process-wide outage.
  */
 export async function checkDb(timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS): Promise<DbState> {
+  const boundMs = Math.max(1, Math.trunc(timeoutMs));
   let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<DbState>((resolve) => {
+    timer = setTimeout(() => resolve('down'), boundMs);
+  });
+
+  const probe: Promise<DbState> = (async (): Promise<DbState> => {
+    const client = await getPool().connect();
+    try {
+      await client.query("SELECT set_config('statement_timeout', $1, false)", [String(boundMs)]);
+      await client.query('SELECT 1');
+      return 'up';
+    } finally {
+      client.release();
+    }
+  })().catch((): DbState => 'down');
+
   try {
-    const probe = getPool()
-      .query('SELECT 1')
-      .then((): DbState => 'up');
-
-    const timeout = new Promise<DbState>((resolve) => {
-      timer = setTimeout(() => resolve('down'), timeoutMs);
-    });
-
     return await Promise.race([probe, timeout]);
-  } catch {
-    return 'down';
   } finally {
     if (timer !== undefined) {
       clearTimeout(timer);
