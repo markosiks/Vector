@@ -125,13 +125,28 @@ export const outcomeRow = z.object({
   created_at: ts,
 });
 
+/**
+ * Explainability breakdown persisted in `scores.components_json`. Downstream
+ * consumers (P2.3 attestations, the agent-detail UI) key on exactly these four
+ * keys, so the shape is enforced at the persistence boundary, not just by the
+ * producer's type. `.strict()` rejects extra/renamed keys at parse time.
+ */
+export const scoreComponents = z
+  .object({
+    perf: z.number().finite(),
+    w: z.number().finite(),
+    policy: z.number().finite(),
+    dd: z.number().finite(),
+  })
+  .strict();
+
 export const scoreRow = z.object({
   id: uuid,
   agent_id: uuid,
   round_id: uuid,
   raw_r: numeric,
   score_r: numeric,
-  components_json: z.unknown().nullable(),
+  components_json: scoreComponents.nullable(),
   created_at: ts,
 });
 
