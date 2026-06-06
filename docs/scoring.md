@@ -144,8 +144,17 @@ read exactly these):
 **Gating.** A floor-crash, or a new score below `s_min`, moves the agent to
 `gated`; otherwise to `active`. The status transition is computed in SQL so the
 read-modify-write is atomic, and an operator-`halted` agent is never changed by
-the scorer (un-halting is an operator action). The `scores`
-`UNIQUE(agent_id, round_id)` makes a re-run idempotent at the insert.
+the scorer (un-halting is an operator action). The score insert is
+`ON CONFLICT (agent_id, round_id) DO NOTHING`: a replay re-reads the immutable
+persisted row and **still converges the agent gate from it**, so a crash that
+failed to gate on a partial failure is healed on retry instead of left
+fail-open. The gate is derived from the persisted `score_r` (source of truth).
+
+**Concurrency precondition (for the P1.4 settlement caller).** `recordScore` is
+a read-modify-write (prior → score → gate). A caller running concurrent rounds
+for the same agent must pass a single transaction-bound client and serialize the
+agent (`SELECT … FOR UPDATE` on `agents`) so the EWMA prior cannot be read stale.
+Passing the shared pool is unsafe for that case. P1.2 ships no such caller.
 
 ## Determinism and fixed-scale output
 
@@ -161,3 +170,37 @@ intentionally and review the diff — never silently re-bless.
 `numeric` columns remain exact end to end (money/score are bound as strings,
 never round-tripped through a float on write/read); the float arithmetic lives
 only inside the score computation, which §6.1 defines in real numbers.
+
+Cross-engine note: `Math.tanh` (and transcendentals generally) are not required
+by ECMAScript to be correctly rounded, so bit-identical output is guaranteed
+only within a fixed bun/V8 build, not across platforms. The `toFixed`
+quantization absorbs sub-ulp noise for effectively all values; pin the runtime
+for any environment that produces or re-verifies attested scores (§7.2).
+
+## Open security notes (owner decisions, not bugs)
+
+These are design tensions surfaced by the P1.2 security audit. They are **not**
+defects in the current phase and are intentionally left for an owner call rather
+than changed unilaterally:
+
+- **Clamp saturation hides soft penalties for high-capital agents.** The terminal
+  `clamp(100·perf·w + policy − dd, 0, 100)` lets a soft penalty be absorbed when
+  the positive term already exceeds 100, so a whale can commit the first soft
+  violation "for free" in the *scalar* score (the breakdown still records it).
+  Fix only if penalties should always bite: clamp the positive term to 100 first,
+  then subtract penalties. Changes scored values — couple with the §6.1
+  `[0,1]`-clamp vs point-scale decision and regenerate the golden table.
+- **Floor-crash is transient.** A `halt`/drain caps the crash round only; EWMA
+  mean-reverts above `s_min` in ~1–3 strong rounds. This is only safe if the §6.2
+  router strictly excludes `gated` agents (no self-funded `car_r`). If a sticky
+  cooldown is wanted, persist crash state on the agent — out of scope for P1.2.
+- **No escalation for sustained ordinary `hard` violations.** A capitalized agent
+  can trip a (non-drain) `hard` rule every round and stay eligible; penalties are
+  per-round, memoryless. Add a rolling-window hard counter if escalation is
+  desired.
+- **`s_min` boundary:** the gate is strict `<` (a score of exactly `s_min` is
+  eligible). The future router's eligibility predicate must be `>= s_min` to
+  agree at the boundary.
+- **Append-only `scores`:** immutability is app-layer only today (no
+  `UPDATE`/`DELETE` path). A DB-level guarantee belongs with the deferred
+  `policy_events` append-only hardening item; include `scores` when that lands.
