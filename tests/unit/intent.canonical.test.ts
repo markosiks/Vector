@@ -93,6 +93,18 @@ describe('normalizeNonce', () => {
     expect(() => normalizeNonce(1.5)).toThrow();
     expect(() => normalizeNonce(NaN)).toThrow();
   });
+
+  test('rejects numeric nonces beyond the safe-integer range (anti-aliasing)', () => {
+    // 2^53 and 2^53+1 are indistinguishable as IEEE-754 doubles; accepting them
+    // would alias two distinct nonces to one canonical token. A string nonce is
+    // the supported escape hatch for large/opaque values.
+    expect(Number.MAX_SAFE_INTEGER + 1).toBe(Number.MAX_SAFE_INTEGER + 2); // precision is already lost
+    expect(() => normalizeNonce(Number.MAX_SAFE_INTEGER + 1)).toThrow(/safe-integer/);
+    expect(() => normalizeNonce(1e21)).toThrow(/safe-integer/);
+    expect(normalizeNonce(Number.MAX_SAFE_INTEGER)).toBe(String(Number.MAX_SAFE_INTEGER));
+    // a string nonce of the same magnitude is preserved verbatim
+    expect(normalizeNonce('9007199254740993')).toBe('9007199254740993');
+  });
 });
 
 describe('normalizeTimestamp', () => {
@@ -106,6 +118,27 @@ describe('normalizeTimestamp', () => {
   test('rejects unparseable timestamps', () => {
     expect(() => normalizeTimestamp('not-a-date')).toThrow();
     expect(() => normalizeTimestamp(NaN)).toThrow();
+  });
+
+  test('rejects ambiguous / non-deterministic string forms', () => {
+    // Timezone-less datetime: ECMA-262 parses this in the host's *local* zone,
+    // so the canonical bytes would depend on the server's TZ. Must be rejected.
+    expect(() => normalizeTimestamp('2030-01-01T00:00:00')).toThrow(/timezone/);
+    // Implementation-defined / non-ISO strings that lenient `Date` would accept.
+    expect(() => normalizeTimestamp('2031')).toThrow();
+    expect(() => normalizeTimestamp('Jan 1 2030')).toThrow();
+    expect(() => normalizeTimestamp('01/02/2030')).toThrow();
+    // A digit string is NOT silently reinterpreted as a year/epoch.
+    expect(() => normalizeTimestamp('1700000000000')).toThrow();
+    // Out-of-range fields in an otherwise well-formed instant still reject.
+    expect(() => normalizeTimestamp('2030-13-45T00:00:00Z')).toThrow();
+  });
+
+  test('accepts strict ISO-8601 instants with Z or numeric offset', () => {
+    expect(normalizeTimestamp('2030-01-01T00:00:00Z')).toBe('2030-01-01T00:00:00.000Z');
+    expect(normalizeTimestamp('2030-01-01T00:00:00.000Z')).toBe('2030-01-01T00:00:00.000Z');
+    expect(normalizeTimestamp('2030-01-01T01:00:00+01:00')).toBe('2030-01-01T00:00:00.000Z');
+    expect(normalizeTimestamp('2030-01-01T01:00:00+0100')).toBe('2030-01-01T00:00:00.000Z');
   });
 });
 

@@ -85,10 +85,22 @@ const fail = (stage: ValidationStage, code: string, message: string): Validation
 /** True iff a canonical decimal string is strictly greater than zero. */
 const isPositive = (d: string): boolean => d !== '0' && !d.startsWith('-');
 
-/** True iff a canonical decimal string lies in the closed interval [0, 1]. */
+/**
+ * True iff a canonical decimal string lies in the closed interval [0, 1].
+ *
+ * Compares on the canonical string directly — never via `Number()` — so the
+ * full precision of the signed/hashed bytes is honoured in the gate (a float
+ * conversion would round e.g. `"1.0000000000000001"` down to `1` and admit a
+ * value strictly greater than 1). Canonical form has a single `"0"`, no trailing
+ * fraction zeros, and a leading `-` for negatives, so [0, 1] is exactly: the
+ * integer part is `0` (any fraction, all < 1) or the value is exactly `"1"`.
+ */
 const inUnitInterval = (d: string): boolean => {
-  const n = Number(d);
-  return Number.isFinite(n) && n >= 0 && n <= 1;
+  if (d.startsWith('-')) return false;
+  const dot = d.indexOf('.');
+  const intPart = dot === -1 ? d : d.slice(0, dot);
+  if (intPart === '0') return true;
+  return intPart === '1' && dot === -1;
 };
 
 /** Step (e): domain bounds on the normalized numeric fields. */
