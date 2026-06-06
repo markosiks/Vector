@@ -1,6 +1,6 @@
 import { scoreRow, type ScoreRow } from '../schema';
 import type { Queryable } from '../types';
-import { insertOne, num, selectMany, type NumericInput } from './_shared';
+import { insertOne, num, selectMany, selectOne, type NumericInput } from './_shared';
 
 /** Fields accepted when recording a per-round score. */
 export interface NewScore {
@@ -31,6 +31,20 @@ export function listScoresByAgent(db: Queryable, agentId: string): Promise<Score
   return selectMany(
     db,
     'SELECT * FROM scores WHERE agent_id = $1 ORDER BY created_at ASC',
+    [agentId],
+    scoreRow,
+  );
+}
+
+/**
+ * The agent's most recent score row, or `null` if it has never been scored.
+ * The EWMA recursion reads its `score_r` as `Score_{r−1}`; a `null` means the
+ * caller seeds the recursion with the low `score_0` prior (§6.1).
+ */
+export function getLatestScoreByAgent(db: Queryable, agentId: string): Promise<ScoreRow | null> {
+  return selectOne(
+    db,
+    'SELECT * FROM scores WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 1',
     [agentId],
     scoreRow,
   );
