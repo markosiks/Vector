@@ -59,4 +59,29 @@ describe('buildInsert', () => {
   test('rejects an unsafe column name', () => {
     expect(() => buildInsert('agents', { 'a; DROP': 1 })).toThrow(/unsafe SQL identifier/);
   });
+
+  test('appends ON CONFLICT (...) DO NOTHING before RETURNING for a reservation', () => {
+    const { text, params } = buildInsert(
+      'intents',
+      { agent_id: 'a', nonce: '1', action: 'open' },
+      { onConflictDoNothing: ['agent_id', 'nonce'] },
+    );
+    expect(text).toBe(
+      'INSERT INTO intents (agent_id, nonce, action) VALUES ($1, $2, $3) ' +
+        'ON CONFLICT (agent_id, nonce) DO NOTHING RETURNING *',
+    );
+    expect(params).toEqual(['a', '1', 'open']);
+  });
+
+  test('validates conflict-target identifiers like every other name', () => {
+    expect(() =>
+      buildInsert('intents', { a: 1 }, { onConflictDoNothing: ['agent_id; DROP'] }),
+    ).toThrow(/unsafe SQL identifier/);
+  });
+
+  test('rejects an empty conflict target rather than emitting invalid SQL', () => {
+    expect(() => buildInsert('intents', { a: 1 }, { onConflictDoNothing: [] })).toThrow(
+      /at least one column/,
+    );
+  });
 });

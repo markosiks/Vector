@@ -103,22 +103,91 @@ const inUnitInterval = (d: string): boolean => {
   return intPart === '1' && dot === -1;
 };
 
+/**
+ * Per-field fractional scale: the `s` of each `numeric(p, s)` column the
+ * persisted `intents` row uses (migration 0001). A value carrying more fraction
+ * digits than `s` would be silently *rounded* by Postgres on INSERT, diverging
+ * the stored row from the signed/hashed Intent and breaking the "numeric is
+ * exact, never through a float" invariant — a value the validator admitted as
+ * exact would persist as a different number.
+ *
+ * Only the *scale* is bounded here, never the integer magnitude: an over-large
+ * size or leverage is the firewall's domain — it CLIPs the magnitude down to a
+ * safe cap before anything is persisted (architecture.txt §6.5), so rejecting on
+ * magnitude here would wrongly hard-reject an input the firewall is designed to
+ * clip. Clipping never adds fraction digits, so this scale guard and the
+ * firewall do not overlap. (The canonical form's generic 80-digit cap in
+ * canonical.ts is an amplification-DoS guard, unrelated to storability.)
+ */
+const STORABLE_SCALE = {
+  size: 18, // numeric(38, 18)
+  tp: 18, // numeric(38, 18)
+  sl: 18, // numeric(38, 18)
+  leverage: 6, // numeric(12, 6)
+  max_slippage: 6, // numeric(12, 6)
+} as const satisfies Record<string, number>;
+
+/**
+ * Count of fraction digits in a canonical decimal string. Canonical form carries
+ * no trailing fraction zeros, so this is the exact count of significant digits
+ * the column would have to store.
+ */
+const fractionDigits = (d: string): number => {
+  const dot = d.indexOf('.');
+  return dot === -1 ? 0 : d.length - dot - 1;
+};
+
+/** True iff `value` has finer fractional scale than its column can store exactly. */
+const exceedsScale = (field: keyof typeof STORABLE_SCALE, value: string): boolean =>
+  fractionDigits(value) > STORABLE_SCALE[field];
+
 /** Step (e): domain bounds on the normalized numeric fields. */
 function checkBounds(intent: Intent): ValidationFailure | null {
   if (!isPositive(intent.size)) {
     return fail('bounds', 'nonpositive_size', 'size must be greater than zero');
   }
-  if ('tp' in intent && intent.tp !== undefined && !isPositive(intent.tp)) {
-    return fail('bounds', 'nonpositive_tp', 'tp must be greater than zero');
+  if (exceedsScale('size', intent.size)) {
+    return fail('bounds', 'size_scale', 'size has more fraction digits than can be stored exactly');
   }
-  if ('sl' in intent && intent.sl !== undefined && !isPositive(intent.sl)) {
-    return fail('bounds', 'nonpositive_sl', 'sl must be greater than zero');
+  if ('tp' in intent && intent.tp !== undefined) {
+    if (!isPositive(intent.tp)) {
+      return fail('bounds', 'nonpositive_tp', 'tp must be greater than zero');
+    }
+    if (exceedsScale('tp', intent.tp)) {
+      return fail('bounds', 'tp_scale', 'tp has more fraction digits than can be stored exactly');
+    }
   }
-  if ('max_slippage' in intent && !inUnitInterval(intent.max_slippage)) {
-    return fail('bounds', 'slippage_out_of_range', 'max_slippage must be within [0, 1]');
+  if ('sl' in intent && intent.sl !== undefined) {
+    if (!isPositive(intent.sl)) {
+      return fail('bounds', 'nonpositive_sl', 'sl must be greater than zero');
+    }
+    if (exceedsScale('sl', intent.sl)) {
+      return fail('bounds', 'sl_scale', 'sl has more fraction digits than can be stored exactly');
+    }
   }
-  if ((intent.action === 'open' || intent.action === 'modify') && !isPositive(intent.leverage)) {
-    return fail('bounds', 'nonpositive_leverage', 'leverage must be greater than zero');
+  if ('max_slippage' in intent) {
+    if (!inUnitInterval(intent.max_slippage)) {
+      return fail('bounds', 'slippage_out_of_range', 'max_slippage must be within [0, 1]');
+    }
+    if (exceedsScale('max_slippage', intent.max_slippage)) {
+      return fail(
+        'bounds',
+        'slippage_scale',
+        'max_slippage has more fraction digits than can be stored exactly',
+      );
+    }
+  }
+  if (intent.action === 'open' || intent.action === 'modify') {
+    if (!isPositive(intent.leverage)) {
+      return fail('bounds', 'nonpositive_leverage', 'leverage must be greater than zero');
+    }
+    if (exceedsScale('leverage', intent.leverage)) {
+      return fail(
+        'bounds',
+        'leverage_scale',
+        'leverage has more fraction digits than can be stored exactly',
+      );
+    }
   }
   return null;
 }

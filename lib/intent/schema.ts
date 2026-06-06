@@ -73,14 +73,19 @@ const signatureField = z
  * target-address step, not here (so that check stays observable in ordering).
  */
 const baseShape = {
-  agent_id: z.string().min(1),
+  // Upper length bounds cap unauthenticated input at the schema stage (DoS / log
+  // and storage abuse): an Intent's bytes are parsed before its signature is
+  // verified, so an attacker can flood huge strings without a valid key. The
+  // caps are generous for legitimate values (DID/ERC-8004 agent ids, EVM
+  // addresses) yet bound the worst case.
+  agent_id: z.string().min(1).max(128),
   nonce: nonceField,
   ttl: ttlField,
-  target_address: z.string().min(1).optional(),
+  target_address: z.string().min(1).max(128).optional(),
 } as const;
 
 const tradeShape = {
-  market: z.string().min(1),
+  market: z.string().min(1).max(64),
   side: z.enum(INTENT_SIDE),
   size: numericField,
   leverage: numericField,
@@ -90,7 +95,7 @@ const tradeShape = {
 } as const;
 
 const closeShape = {
-  market: z.string().min(1),
+  market: z.string().min(1).max(64),
   size: numericField,
   max_slippage: numericField,
   tp: numericField.optional(),
