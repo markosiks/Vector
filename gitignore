@@ -1,0 +1,153 @@
+# =============================================================================
+# Vector — .gitignore
+# Stack: Next.js (App Router) + TypeScript · Neon/Postgres · viem/wagmi ·
+#        Solidity (ERC-8004) via Hardhat/Foundry · CLI rails
+# =============================================================================
+
+# ----- Dependencies ----------------------------------------------------------
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+jspm_packages/
+bower_components/
+
+# ----- Package manager logs / caches -----------------------------------------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+.npm/
+.yarn-integrity
+
+# ----- Environment & secrets -------------------------------------------------
+# Never commit real secrets (DB URLs, RPC keys, private keys, API keys).
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local
+.envrc
+
+# Wallet / chain secrets
+*.pem
+*.key
+*.keystore
+secrets.json
+mnemonic.txt
+.secret
+
+# ----- Next.js ---------------------------------------------------------------
+.next/
+out/
+build/
+dist/
+.vercel/
+next-env.d.ts
+*.tsbuildinfo
+
+# ----- TypeScript / build artifacts ------------------------------------------
+*.tsbuildinfo
+.tscache/
+
+# ----- Testing & coverage ----------------------------------------------------
+coverage/
+.nyc_output/
+playwright-report/
+playwright/.cache/
+test-results/
+blob-report/
+.vitest/
+junit.xml
+
+# ----- Linters / formatters / tooling caches ---------------------------------
+.eslintcache
+.stylelintcache
+.prettiercache
+.cache/
+.turbo/
+.swc/
+
+# ----- Smart contracts (ERC-8004: Hardhat / Foundry) -------------------------
+# Hardhat
+artifacts/
+cache/
+typechain/
+typechain-types/
+deployments/localhost/
+# Foundry
+forge-cache/
+broadcast/
+# Keep deploy receipts you intend to track by un-ignoring explicitly above.
+
+# ----- Database / Neon / Postgres --------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+*.dump
+*.sql.bak
+.drizzle/
+drizzle/meta/_journal.json.bak
+prisma/*.db
+prisma/migrations/dev/
+
+# ----- Logs & runtime --------------------------------------------------------
+logs/
+*.log
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ----- Storybook -------------------------------------------------------------
+storybook-static/
+
+# ----- Editors / IDE ---------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.history/
+
+# ----- OS files --------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ----- Misc temp -------------------------------------------------------------
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+
+# =============================================================================
+# Project-specific (review before keeping)
+# -----------------------------------------------------------------------------
+# NOTE: the Vector prompt-set treats docs/*.md (e.g. docs/onboarding.md) as
+# COMMITTED deliverable artifacts. If you keep the line below, those handwritten
+# docs will be ignored. Prefer ignoring only GENERATED docs instead, e.g.:
+#   docs/_generated/
+#   docs/api/
+# Uncomment the broad rule only if docs/ is fully auto-generated:
+docs/
+docs/_generated/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
