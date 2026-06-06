@@ -1,6 +1,17 @@
-import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { applyMigration, type Migration, planDown, planUp } from '@/lib/db/migrate';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+
+import {
+  applyMigration,
+  assertSessionConnection,
+  loadMigrations,
+  type Migration,
+  planDown,
+  planUp,
+} from '@/lib/db/migrate';
 import type { Queryable } from '@/lib/db/types';
 
 const M = (version: string, name = `m${version}`): Migration => ({
@@ -104,5 +115,75 @@ describe('applyMigration', () => {
     const db = new RecordingDb('-- up 0001');
     await expect(applyMigration(db, M('0001'), 'up')).rejects.toThrow('boom');
     expect(db.calls.map((c) => c.sql)).toEqual(['BEGIN', '-- up 0001', 'ROLLBACK']);
+  });
+
+  test('a failing ROLLBACK does not mask the original migration error', async () => {
+    // Fail on both the migration SQL and the ROLLBACK; the caller must still see
+    // the root cause, not the rollback error.
+    class DoubleFailDb implements Queryable {
+      async query<R = Record<string, unknown>>(
+        sql: string,
+      ): Promise<{ rows: R[]; rowCount: number | null }> {
+        if (sql.includes('-- up 0001')) throw new Error('boom: migration');
+        if (sql === 'ROLLBACK') throw new Error('boom: rollback');
+        return { rows: [], rowCount: 0 };
+      }
+    }
+    await expect(applyMigration(new DoubleFailDb(), M('0001'), 'up')).rejects.toThrow(
+      'boom: migration',
+    );
+  });
+});
+
+describe('loadMigrations', () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'vec-mig-'));
+  });
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('throws on a duplicate version+direction instead of silently picking one', () => {
+    writeFileSync(join(dir, '0001_a.up.sql'), '-- a');
+    writeFileSync(join(dir, '0001_a.down.sql'), '-- a down');
+    writeFileSync(join(dir, '0001_b.up.sql'), '-- b'); // duplicate up for version 0001
+    expect(() => loadMigrations(dir)).toThrow(/duplicate up migration for version 0001/);
+  });
+});
+
+describe('assertSessionConnection', () => {
+  /** Fake that echoes a set_config value back on current_setting (a real session). */
+  class SessionDb implements Queryable {
+    private settings = new Map<string, string>();
+    async query<R = Record<string, unknown>>(
+      sql: string,
+      params?: readonly unknown[],
+    ): Promise<{ rows: R[]; rowCount: number | null }> {
+      if (sql.includes('set_config')) {
+        this.settings.set(String(params?.[0]), String(params?.[1]));
+        return { rows: [], rowCount: 0 };
+      }
+      const v = this.settings.get(String(params?.[0])) ?? '';
+      return { rows: [{ v } as R], rowCount: 1 };
+    }
+  }
+
+  /** Fake that drops session state between statements (transaction pooler). */
+  class PoolerDb implements Queryable {
+    async query<R = Record<string, unknown>>(
+      sql: string,
+    ): Promise<{ rows: R[]; rowCount: number | null }> {
+      if (sql.includes('set_config')) return { rows: [], rowCount: 0 };
+      return { rows: [{ v: '' } as R], rowCount: 1 };
+    }
+  }
+
+  test('resolves when session state persists across statements', async () => {
+    await expect(assertSessionConnection(new SessionDb())).resolves.toBeUndefined();
+  });
+
+  test('throws when session state is lost (transaction pooling)', async () => {
+    await expect(assertSessionConnection(new PoolerDb())).rejects.toThrow(/session/i);
   });
 });
