@@ -111,5 +111,14 @@ export async function seedSmoke(db: Queryable): Promise<void> {
 }
 
 export async function resetData(db: Queryable): Promise<void> {
+  // Fail closed if this would run against the default `public` schema. resetData
+  // is a destructive TRUNCATE of every table and has no business touching a
+  // production database; legitimate callers (tests, local resets) operate inside
+  // a dedicated non-public schema via `search_path`. This blocks the footgun of
+  // a `public`-bound connection being passed in by mistake.
+  const { rows } = await db.query<{ schema: string }>('SELECT current_schema() AS schema');
+  if (rows[0]?.schema === 'public') {
+    throw new Error('resetData refused: current_schema is "public" (destructive TRUNCATE blocked)');
+  }
   await db.query(`TRUNCATE ${ALL_TABLES.join(', ')} RESTART IDENTITY CASCADE`);
 }
