@@ -4,7 +4,12 @@ import { CONFIG } from '@/lib/config/constants';
 import { updateAgentScore } from '@/lib/db/repos/agents';
 import type { OutcomeRow, PolicyEventRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
+import {
+  FRESH_WALLET_TRANSFER_BLOCK_RULE,
+  transferBlockRule,
+} from '@/lib/referee/rules/transfer-block';
 import { deriveScoreInputs, recordScore } from '@/lib/scoring/record';
+import { score } from '@/lib/scoring/score';
 
 /**
  * Unit coverage for the persistence layer that wraps the pure scorer:
@@ -84,6 +89,65 @@ describe('deriveScoreInputs', () => {
     });
   });
 
+  test('skips meta events: an internal_error (severity hard) is not an agent violation', () => {
+    const inputs = deriveScoreInputs(
+      [],
+      [
+        event({ rule_fired: 'internal_error', severity: 'hard', decision: 'REJECT' }),
+        event({ rule_fired: 'pre_validation', severity: 'none', decision: 'REJECT' }),
+        event({ rule_fired: 'allow', severity: 'none', decision: 'ALLOW' }),
+      ],
+    );
+    expect(inputs.hard).toBe(0);
+    expect(inputs.soft).toBe(0);
+    expect(inputs.halt).toBe(0);
+  });
+
+  test('dedups re-evaluations: the same intent scored twice counts once (worst severity)', () => {
+    const intentId = crypto.randomUUID();
+    // Append-only audit log: two evaluations of the SAME intent, escalating soft→hard.
+    const inputs = deriveScoreInputs(
+      [],
+      [
+        event({ intent_id: intentId, rule_fired: 'size_cap', severity: 'soft', decision: 'CLIP' }),
+        event({
+          intent_id: intentId,
+          rule_fired: 'market_whitelist',
+          severity: 'hard',
+          decision: 'REJECT',
+        }),
+      ],
+    );
+    expect(inputs.hard).toBe(1); // not 2, and not double-counted as soft+hard
+    expect(inputs.soft).toBe(0);
+  });
+
+  test('drain rule constant matches the referee and crashes the score', () => {
+    // Pin the cross-module coupling: the transfer-block rule emits exactly the
+    // literal scoring keys `drain_r` on, and a single such event floor-crashes.
+    const decision = transferBlockRule(
+      { action: 'transfer', target_address: '0xdrain' } as never,
+      { destination: undefined } as never,
+      {
+        fresh_wallet_criteria: { whitelist: [], max_age_seconds: 1, require_zero_history: true },
+      } as never,
+    );
+    expect(decision?.rule_fired).toBe(FRESH_WALLET_TRANSFER_BLOCK_RULE);
+
+    const inputs = deriveScoreInputs(
+      [outcome({ pnl_realized: '9999', capital_at_risk: '100000' })],
+      [
+        event({
+          rule_fired: FRESH_WALLET_TRANSFER_BLOCK_RULE,
+          severity: 'hard',
+          decision: 'REJECT',
+        }),
+      ],
+    );
+    expect(inputs.drain_r).toBe(true);
+    expect(score(inputs, 90, CONFIG.scoring).crashed).toBe(true);
+  });
+
   test('volume/trade-count invariance: many tiny outcomes equal one aggregate', () => {
     const big = deriveScoreInputs([outcome({ pnl_realized: '100', capital_at_risk: '10000' })], []);
     const split = deriveScoreInputs(
@@ -97,15 +161,21 @@ describe('deriveScoreInputs', () => {
 /** Minimal fake routing by SQL verb/table; records the UPDATE bind params. */
 class FakeDb implements Queryable {
   public updateParams: readonly unknown[] | undefined;
-  constructor(private readonly latestScoreRows: Record<string, unknown>[]) {}
+  constructor(
+    private readonly latestScoreRows: Record<string, unknown>[],
+    private readonly insertConflict = false,
+  ) {}
   async query<R = Record<string, unknown>>(
     sql: string,
     params?: readonly unknown[],
   ): Promise<{ rows: R[]; rowCount: number | null }> {
-    if (sql.startsWith('SELECT * FROM scores')) {
+    if (sql.startsWith('SELECT') && sql.includes('FROM scores')) {
       return { rows: this.latestScoreRows as R[], rowCount: this.latestScoreRows.length };
     }
     if (sql.startsWith('INSERT INTO scores')) {
+      if (this.insertConflict) {
+        return { rows: [] as R[], rowCount: 0 }; // ON CONFLICT DO NOTHING
+      }
       const row = {
         id: crypto.randomUUID(),
         agent_id: AGENT,
@@ -203,6 +273,24 @@ describe('recordScore', () => {
       inputs: { pnl_r: 5_000, car_r: 90_000, soft: 0, hard: 0, halt: 0, dd_r: 0, drain_r: false },
     });
     expect(agent.status).toBe('active');
+  });
+
+  test('replay converges the gate from the persisted score (idempotent, not fail-open)', async () => {
+    // The round was already scored as a crash (7.000) but the agent gate was
+    // never applied (partial failure). The insert now conflicts; recordScore must
+    // re-read the persisted crash row and STILL gate the agent from it — even
+    // though the recomputed inputs look healthy.
+    const db = new FakeDb([{ ...latestRow('7.000') }], /* insertConflict */ true);
+    const { result, agent } = await recordScore({
+      db,
+      agentId: AGENT,
+      roundId: ROUND,
+      inputs: { pnl_r: 5_000, car_r: 90_000, soft: 0, hard: 0, halt: 0, dd_r: 0, drain_r: false },
+    });
+    expect(result.crashed).toBe(false); // recomputed inputs are healthy…
+    expect(db.updateParams?.[1]).toBe('7.000'); // …but the cache follows the persisted truth
+    expect(db.updateParams?.[2]).toBe(true); // gated from the persisted 7.000 < s_min
+    expect(agent.status).toBe('gated');
   });
 });
 

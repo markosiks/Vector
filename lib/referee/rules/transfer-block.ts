@@ -2,6 +2,13 @@ import type { Rule } from '../types';
 import { isWhitelistedAddress } from './_shared';
 
 /**
+ * `rule_fired` identifier for rule #3. Exported as the single source of truth so
+ * that downstream consumers (notably scoring's `drain_r` floor-crash, §6.1) key
+ * on the same literal at compile time rather than re-declaring a fragile copy.
+ */
+export const FRESH_WALLET_TRANSFER_BLOCK_RULE = 'fresh_wallet_transfer_block';
+
+/**
  * Rule 3 — Fresh-wallet / transfer block. **The demo's load-bearing rule.**
  *
  * A `transfer` (the only fund-moving action, §8.2; "withdraw" is a descriptive
@@ -33,7 +40,7 @@ export const transferBlockRule: Rule = (intent, state, config) => {
   return {
     decision: 'REJECT',
     severity: 'hard',
-    rule_fired: 'fresh_wallet_transfer_block',
+    rule_fired: FRESH_WALLET_TRANSFER_BLOCK_RULE,
     detail: {
       reason: target === undefined ? 'missing_target_address' : 'non_whitelisted_destination',
       target_address: target ?? null,

@@ -84,7 +84,7 @@ export async function seedSmoke(db: Queryable): Promise<void> {
 
   await db.query(
     `INSERT INTO scores (id, agent_id, round_id, raw_r, score_r, components_json)
-     VALUES ($1, $2, $3, 0.42, 50, '{"perf":0.5,"policy":0,"dd":0}'::jsonb)
+     VALUES ($1, $2, $3, 0.42, 50, '{"perf":0.5,"w":0,"policy":0,"dd":0}'::jsonb)
      ON CONFLICT (id) DO NOTHING`,
     [ID.score, ID.agent, ID.round],
   );
