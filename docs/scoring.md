@@ -198,9 +198,10 @@ than changed unilaterally:
   can trip a (non-drain) `hard` rule every round and stay eligible; penalties are
   per-round, memoryless. Add a rolling-window hard counter if escalation is
   desired.
-- **`s_min` boundary:** the gate is strict `<` (a score of exactly `s_min` is
-  eligible). The future router's eligibility predicate must be `>= s_min` to
-  agree at the boundary.
+- **`s_min` boundary (already consistent — not open):** the scorer gates on
+  `score < s_min`; the router's `isEligible` (`derive.ts`, §6.2 step 1) uses
+  `score >= s_min`. These are exact complements, so a score of exactly `s_min`
+  is both un-gated and eligible. Keep them in lockstep if either changes.
 - **Append-only `scores`:** immutability is app-layer only today (no
   `UPDATE`/`DELETE` path). A DB-level guarantee belongs with the deferred
   `policy_events` append-only hardening item; include `scores` when that lands.
