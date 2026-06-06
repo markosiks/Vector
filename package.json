@@ -10,13 +10,17 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test tests/",
+    "test": "bun run test:unit && bun run test:fuzz && bun run test:integration && bun run test:e2e",
     "test:unit": "bun test tests/unit",
     "test:fuzz": "bun test tests/fuzz",
     "test:integration": "bun test tests/integration",
     "test:e2e": "bun test tests/e2e",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:migrate": "bun run scripts/db/migrate.ts",
+    "db:rollback": "bun run scripts/db/rollback.ts",
+    "db:seed": "bun run scripts/db/seed.ts",
+    "db:reset": "bun run scripts/db/reset.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
