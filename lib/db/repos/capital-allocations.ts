@@ -1,6 +1,6 @@
 import { capitalAllocationRow, type AllocationTrigger, type CapitalAllocationRow } from '../schema';
 import type { Queryable } from '../types';
-import { insertOne, num, selectMany, type NumericInput } from './_shared';
+import { insertOneOrNull, num, selectMany, type NumericInput } from './_shared';
 
 /** Fields accepted when recording a capital re-allocation (§6.2). */
 export interface NewCapitalAllocation {
@@ -13,11 +13,19 @@ export interface NewCapitalAllocation {
   trigger: AllocationTrigger;
 }
 
+/**
+ * Insert one capital allocation, idempotently. The ledger is append-only and
+ * each `(agent_id, round_id)` is allocated exactly once, so a replay (settlement
+ * re-run, retry after a partial failure) is `ON CONFLICT DO NOTHING` against
+ * `UNIQUE (agent_id, round_id)` and returns `null` — the caller re-reads the
+ * already-persisted round rather than appending a duplicate that would double
+ * the round's `Σ amount`. Mirrors `insertScore`.
+ */
 export function insertCapitalAllocation(
   db: Queryable,
   input: NewCapitalAllocation,
-): Promise<CapitalAllocationRow> {
-  return insertOne(
+): Promise<CapitalAllocationRow | null> {
+  return insertOneOrNull(
     db,
     'capital_allocations',
     {
@@ -30,6 +38,7 @@ export function insertCapitalAllocation(
       trigger: input.trigger,
     },
     capitalAllocationRow,
+    { onConflictDoNothing: ['agent_id', 'round_id'] },
   );
 }
 

@@ -136,6 +136,15 @@ capital now, or that just had it drained). An agent that was and stays empty is
 omitted as ledger noise; this does not affect conservation, since omitted rows
 carry no capital.
 
+The ledger enforces **one row per `(agent_id, round_id)`** via a `UNIQUE`
+constraint (migration `0003`), like `scores` and `attestations`. Inserts are
+`ON CONFLICT DO NOTHING`, so a settlement **retry** of an already-recorded round
+writes nothing and `recordRoute` returns the rows already on the ledger —
+duplicates that would double the round's `Σ amount` are impossible. The N inserts
+of a round must share **one transaction**: `recordRoute` requires a
+transaction-bound `Queryable`, so a mid-round failure rolls the whole round back
+rather than persisting a partial, non-conserving set.
+
 | Column         | Type            | Meaning                                                       |
 | -------------- | --------------- | ------------------------------------------------------------ |
 | `amount`       | `numeric(38,18)`| Allocated capital this round, in `capital_unit_label`. `≥ 0`. |
