@@ -11,6 +11,11 @@
  * the *absolute* target rather than accumulating signed deltas.
  */
 
+/** Amount column scale — `capital_allocations.amount numeric(38,18)`. */
+export const AMOUNT_SCALE = 18;
+/** Weight column scale — `capital_allocations.{target,prev}_weight numeric(9,8)`. */
+export const WEIGHT_SCALE = 8;
+
 /**
  * Convert a finite, non-negative decimal `value` to integer units at `scale`
  * decimal places, exactly (via its decimal string, never a binary float
@@ -21,6 +26,16 @@
 export function toUnits(value: number, scale: number): bigint {
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`toUnits: value must be finite and >= 0, got ${value}`);
+  }
+  // A `number` above 2^53 has already lost integer precision, and `toFixed`
+  // switches to exponential notation at `1e21`, which would fail the `BigInt`
+  // parse with a cryptic message. Reject loudly: an exact large magnitude must
+  // be supplied as a decimal string via `parseUnits`, not a lossy `number`.
+  if (value > Number.MAX_SAFE_INTEGER) {
+    throw new RangeError(
+      `toUnits: value ${value} exceeds Number.MAX_SAFE_INTEGER and cannot be represented ` +
+        'exactly; pass it as an exact decimal string via parseUnits',
+    );
   }
   if (!Number.isInteger(scale) || scale < 0) {
     throw new RangeError(`toUnits: scale must be a non-negative integer, got ${scale}`);
@@ -37,6 +52,10 @@ export function toUnits(value: number, scale: number): bigint {
  * `scale`, **exactly** via its digits — never through a binary float, so a
  * 24-digit `numeric` amount round-trips without precision loss. Fractional
  * digits beyond `scale` are truncated.
+ *
+ * A string with no digits at all (`''`, whitespace, `'.'`, a lone sign) is
+ * rejected rather than silently parsed as `0`: a missing/garbage numeric must
+ * fail loudly, not masquerade as a zero amount or weight.
  */
 export function parseUnits(value: string, scale: number): bigint {
   if (!Number.isInteger(scale) || scale < 0) {
@@ -47,7 +66,12 @@ export function parseUnits(value: string, scale: number): bigint {
   const magnitude = (negative ? trimmed.slice(1) : trimmed).replace(/^\+/, '');
   const dotParts = magnitude.split('.');
   const [intPart = '', fracPart = ''] = dotParts;
-  if (dotParts.length > 2 || !/^\d*$/.test(intPart) || !/^\d*$/.test(fracPart)) {
+  if (
+    dotParts.length > 2 ||
+    !/^\d*$/.test(intPart) ||
+    !/^\d*$/.test(fracPart) ||
+    (intPart === '' && fracPart === '')
+  ) {
     throw new RangeError(`parseUnits: not a decimal string: ${value}`);
   }
   const frac = fracPart.padEnd(scale, '0').slice(0, scale);
