@@ -20,7 +20,8 @@
     "db:migrate": "bun run scripts/db/migrate.ts",
     "db:rollback": "bun run scripts/db/rollback.ts",
     "db:seed": "bun run scripts/db/seed.ts",
-    "db:reset": "bun run scripts/db/reset.ts"
+    "db:reset": "bun run scripts/db/reset.ts",
+    "api:openapi": "bun run scripts/api/openapi.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

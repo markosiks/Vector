@@ -81,6 +81,29 @@ export async function selectMany<S extends z.ZodTypeAny>(
   return rows.map((r) => schema.parse(r));
 }
 
+/** A keyset position for the time-ordered feeds: the last row's `(created_at, id)`. */
+export interface Keyset {
+  readonly t: string;
+  readonly id: string;
+}
+
+/**
+ * Append a keyset (seek) predicate for a feed ordered `created_at DESC, id DESC`
+ * and return the SQL fragment, binding `before` into `params` as `$n`
+ * parameters (never inlined). The fragment selects rows strictly *older* than
+ * the cursor — `created_at < t OR (created_at = t AND id < id)` — so paging is
+ * stable while new rows arrive at the head. The timestamp is bound once and
+ * referenced twice; both binds are cast (`::timestamptz`, `::uuid`) so Postgres
+ * never has to infer a parameter's type from context.
+ */
+export function keysetBefore(before: Keyset, params: unknown[]): string {
+  params.push(before.t);
+  const t = `$${params.length}::timestamptz`;
+  params.push(before.id);
+  const id = `$${params.length}::uuid`;
+  return `(created_at < ${t} OR (created_at = ${t} AND id < ${id}))`;
+}
+
 /** Run a parameterized query and parse the first row, or return `null`. */
 export async function selectOne<S extends z.ZodTypeAny>(
   db: Queryable,
