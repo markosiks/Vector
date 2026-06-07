@@ -18,7 +18,17 @@ let pool: Pool | undefined;
 /** Lazily create and return the shared Neon connection pool. */
 export function getPool(): Pool {
   if (pool === undefined) {
-    const created = new Pool({ connectionString: ENV.DATABASE_URL });
+    const created = new Pool({
+      connectionString: ENV.DATABASE_URL,
+      // Bound the client-side connect queue. The pool is reachable from the
+      // unauthenticated `/api/health` probe (`checkDb`), whose wall-clock race
+      // gives up at `boundMs` but does not cancel the in-flight `connect()`.
+      // Under a flood against a saturated/slow backend those pending `connect()`
+      // promises would otherwise accumulate without limit. With a timeout an
+      // un-serviceable connect rejects instead of queuing forever; `checkDb`
+      // already degrades a thrown connect to `'down'`, so health stays bounded.
+      connectionTimeoutMillis: 10_000,
+    });
     // An idle pooled client can fail asynchronously when the backend drops the
     // connection — Neon closes idle connections aggressively. node-postgres
     // surfaces that as a pool `'error'` event; with no listener the EventEmitter
