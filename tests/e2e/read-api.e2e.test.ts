@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 
+import type { Pool } from '@neondatabase/serverless';
 import type { NextRequest } from 'next/server';
 
 import type { PolicyEventRow } from '@/lib/db/schema';
@@ -28,12 +29,12 @@ function descCmp(a: PolicyEventRow, b: PolicyEventRow): number {
   return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
-// Mock only the Neon driver; the real `getPool` builds a pool from this. The
-// query honors the exact keyset contract the repo emits.
+// A fake pool injected through the db client's `setPoolForTest` seam (NOT a
+// `mock.module` on the driver — Bun links static imports eagerly, so a
+// process-wide driver mock would leak into the real-Neon integration suites in a
+// one-process `bun test`). The query honors the exact keyset contract the repo
+// emits.
 class MockPool {
-  on(): this {
-    return this;
-  }
   async query(
     sql: string,
     params?: readonly unknown[],
@@ -62,21 +63,26 @@ class MockPool {
   }
 }
 
+// `server-only` throws outside an RSC bundle; neutralising it is harmless.
 mock.module('server-only', () => ({}));
-mock.module('@neondatabase/serverless', () => ({ Pool: MockPool }));
 
 let resetPool: () => void;
+let setPoolForTest: (p: Pool | undefined) => void;
 let prevDbUrl: string | undefined;
 let GET: (req: NextRequest) => Promise<Response>;
 
 beforeAll(async () => {
-  // Restored in `afterAll` so it never leaks into the integration files' `hasDb`
-  // check (bun evaluates each file lazily just before running it, so a lingering
-  // value would un-skip them).
+  // `??=`: never clobber a real `DATABASE_URL`. This file injects a fake pool, so
+  // it never connects; overwriting would freeze the process-wide `ENV.DATABASE_URL`
+  // to a fake and break the real-Neon integration probes that run later in a
+  // one-process `bun test`. Restored in `afterAll` so it can't un-skip integration.
   prevDbUrl = process.env.DATABASE_URL;
-  process.env.DATABASE_URL = 'postgresql://user:pass@host.neon.tech/db?sslmode=require';
-  resetPool = (await import('@/lib/db/client')).resetPool;
+  process.env.DATABASE_URL ??= 'postgresql://user:pass@host.neon.tech/db?sslmode=require';
+  const client = await import('@/lib/db/client');
+  resetPool = client.resetPool;
+  setPoolForTest = client.setPoolForTest;
   resetPool();
+  setPoolForTest(new MockPool() as unknown as Pool); // the route's `getPool()` → this fake
   GET = (await import('@/app/api/policy-events/route')).GET;
 });
 

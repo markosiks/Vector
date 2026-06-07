@@ -57,6 +57,21 @@ export function resetPool(): void {
   pool = undefined;
 }
 
+/**
+ * Inject a pre-built pool so a test can supply a fake Neon client. Test-only.
+ *
+ * The alternative — `mock.module('@neondatabase/serverless', …)` — is the wrong
+ * tool here: Bun links static imports eagerly at load, so a top-level module mock
+ * is process-wide and cannot be restored once the integration suites (which
+ * `import { Pool }` for a real connection) are linked in the same `bun test`
+ * process. Injecting through this seam keeps the fake scoped to the test that
+ * sets it and leaves the real driver untouched. Pass `undefined` to clear
+ * (equivalent to {@link resetPool}). Not for production request paths.
+ */
+export function setPoolForTest(p: Pool | undefined): void {
+  pool = p;
+}
+
 /** Default upper bound on the health probe before it reports `down`. */
 const DEFAULT_PROBE_TIMEOUT_MS = 2_000;
 
