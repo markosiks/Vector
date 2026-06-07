@@ -1,0 +1,270 @@
+{
+  "version": "1.0.0",
+  "baseTimeMs": 1767225600000,
+  "ttlHorizonMs": 10000,
+  "totalTicks": 10,
+  "agentIds": ["seed-leader", "seed-2"],
+  "ticks": [
+    {
+      "index": 0,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60000",
+          "ts": "2026-01-01T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60050",
+          "ts": "2026-01-01T00:00:02.000Z"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60100",
+          "ts": "2026-01-01T00:00:04.000Z"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60150",
+          "ts": "2026-01-01T00:00:06.000Z"
+        }
+      }
+    },
+    {
+      "index": 4,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60200",
+          "ts": "2026-01-01T00:00:08.000Z"
+        }
+      }
+    },
+    {
+      "index": 5,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60250",
+          "ts": "2026-01-01T00:00:10.000Z"
+        }
+      }
+    },
+    {
+      "index": 6,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60300",
+          "ts": "2026-01-01T00:00:12.000Z"
+        }
+      }
+    },
+    {
+      "index": 7,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60350",
+          "ts": "2026-01-01T00:00:14.000Z"
+        }
+      }
+    },
+    {
+      "index": 8,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60400",
+          "ts": "2026-01-01T00:00:16.000Z"
+        }
+      }
+    },
+    {
+      "index": 9,
+      "markets": {
+        "BTC-PERP": {
+          "price": "60450",
+          "ts": "2026-01-01T00:00:18.000Z"
+        }
+      }
+    }
+  ],
+  "outcomes": {
+    "seed-leader": [
+      {
+        "pnl_realized": "1200",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "1500",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "1800",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "2100",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "2400",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "2700",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "3000",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "3300",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "3600",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "3900",
+        "pnl_marked": "0",
+        "capital_at_risk": "32000",
+        "fees": "32",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      }
+    ],
+    "seed-2": [
+      {
+        "pnl_realized": "120",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "150",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "180",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "210",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "240",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "270",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "300",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "330",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "360",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "390",
+        "pnl_marked": "0",
+        "capital_at_risk": "6000",
+        "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      }
+    ]
+  },
+  "attack": {
+    "atTick": 4,
+    "targetAgentId": "seed-leader",
+    "attackerAddress": "0xbabababababababababababababababababababa"
+  }
+}
