@@ -282,6 +282,28 @@ describe('route — edge cases and invariants', () => {
     ).toThrow(RangeError);
   });
 
+  test('a negative prev amount or weight throws instead of skewing the baseline', () => {
+    // Regression: the prior comes from the ledger (CHECK >= 0). A negative value
+    // is a corrupted row; letting it through skewed `prevSum`/`prevW` (or forced
+    // a false cold start when negatives cancelled) and corrupted the move policy.
+    const agents = [agent('a', 80), agent('b', 60)];
+    const negAmount: PrevAllocation[] = [
+      { agentId: 'a', amount: '-100.0', weight: '0.50000000' },
+      { agentId: 'b', amount: '100.0', weight: '0.50000000' },
+    ];
+    expect(() =>
+      route(agents, negAmount, { tick: 5, cooldownUntilTick: 0 }, CFG, 'settle'),
+    ).toThrow(RangeError);
+
+    const negWeight: PrevAllocation[] = [
+      { agentId: 'a', amount: '500000.0', weight: '-0.50000000' },
+      { agentId: 'b', amount: '500000.0', weight: '0.50000000' },
+    ];
+    expect(() =>
+      route(agents, negWeight, { tick: 5, cooldownUntilTick: 0 }, CFG, 'settle'),
+    ).toThrow(RangeError);
+  });
+
   test('settle is idempotent: re-running with the same inputs yields the same output', () => {
     const agents = [agent('a', 80), agent('b', 55), agent('c', 40)];
     const prev: PrevAllocation[] = agents.map((a) => ({

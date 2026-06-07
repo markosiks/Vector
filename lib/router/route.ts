@@ -1,10 +1,12 @@
 import {
+  AMOUNT_SCALE,
   apportion,
   formatUnits,
   parseUnits,
   ratioToFixed,
   subtractFixed,
   toUnits,
+  WEIGHT_SCALE,
 } from './fixed-point';
 import type {
   Allocation,
@@ -23,7 +25,10 @@ import type {
  * allocation that **always conserves the fixed pool** (`Σ amount == pool_size`,
  * exactly, every pass) while moving capital toward merit *visibly but stably*.
  * It performs no I/O, reads no clock, and uses no randomness, so a fixed input
- * yields a bit-identical result on every run (§6.5 determinism mandate); the
+ * (including the agent order) yields a bit-identical result on every run **on a
+ * given runtime** (§6.5 determinism mandate). The one caveat: the softmax uses
+ * `Math.exp`, whose last-ULP result is not guaranteed identical across JS
+ * engines / CPUs, so cross-host replay should be pinned to one runtime. The
  * persistence layer lives in `record.ts`.
  *
  * ## Allocation rule (§6.2, steps 1–6, in order)
@@ -63,16 +68,11 @@ import type {
  * target (max-step does not rate-limit a fill from an empty pool).
  */
 
-/** Weight column scale — `capital_allocations.{target,prev}_weight numeric(9,8)`. */
-const WEIGHT_SCALE = 8;
-/** Amount column scale — `capital_allocations.amount numeric(38,18)`. */
-const AMOUNT_SCALE = 18;
-
 /** Per-agent working state accumulated through the routing pass. */
 interface Node {
   readonly agent: RouterAgent;
   readonly prevAmt: bigint;
-  readonly prevWeightStr: string;
+  readonly prevWeightUnits: bigint;
   prevW: number;
   eligible: boolean;
   gatedOut: boolean;
@@ -85,6 +85,21 @@ function requireFinite(value: number, label: string): void {
   if (!Number.isFinite(value)) {
     throw new RangeError(`route(): ${label} must be finite, got ${value}`);
   }
+}
+
+/**
+ * Parse a stored `amount`/`weight` from the previous allocation into integer
+ * units, rejecting a negative value. The prior comes from the ledger and is a
+ * non-negative quantity by the `capital_allocations` CHECK constraints; a
+ * negative here means a corrupted row, so fail loudly rather than let it skew
+ * `prevSum`/`prevW` (or force a false cold start) and corrupt the move policy.
+ */
+function parsePrevUnits(value: string, scale: number, label: string): bigint {
+  const units = parseUnits(value, scale);
+  if (units < 0n) {
+    throw new RangeError(`route(): ${label} must be >= 0, got ${value}`);
+  }
+  return units;
 }
 
 /** A finite float ratio `num / den` (den > 0), computed with extended precision. */
@@ -175,12 +190,19 @@ export function route(
   const nodes: Node[] = agents.map((agent) => {
     requireFinite(agent.score, `score(${agent.agentId})`);
     const p = prevByAgent.get(agent.agentId);
-    const prevAmt = p === undefined ? 0n : parseUnits(p.amount, AMOUNT_SCALE);
+    const prevAmt =
+      p === undefined
+        ? 0n
+        : parsePrevUnits(p.amount, AMOUNT_SCALE, `prev amount(${agent.agentId})`);
+    const prevWeightUnits =
+      p === undefined
+        ? 0n
+        : parsePrevUnits(p.weight, WEIGHT_SCALE, `prev weight(${agent.agentId})`);
     const gatedOut = agent.halted || agent.crashed;
     return {
       agent,
       prevAmt,
-      prevWeightStr: p?.weight ?? ratioToFixed(0n, 1n, WEIGHT_SCALE),
+      prevWeightUnits,
       prevW: 0,
       eligible: !gatedOut && agent.score >= s_min,
       gatedOut,
@@ -237,7 +259,7 @@ export function route(
   const allocations: Allocation[] = nodes.map((nd, i) => {
     const amountUnits = amounts[i] ?? 0n;
     const targetWeight = ratioToFixed(amountUnits, pool, WEIGHT_SCALE);
-    const prevWeight = formatUnits(parseUnits(nd.prevWeightStr, WEIGHT_SCALE), WEIGHT_SCALE);
+    const prevWeight = formatUnits(nd.prevWeightUnits, WEIGHT_SCALE);
     return {
       agentId: nd.agent.agentId,
       amount: formatUnits(amountUnits, AMOUNT_SCALE),
