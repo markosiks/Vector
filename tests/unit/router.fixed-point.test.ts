@@ -99,6 +99,26 @@ describe('toUnits / formatUnits / parseUnits — exact round-trip', () => {
     expect(() => toUnits(Number.POSITIVE_INFINITY, 8)).toThrow(RangeError);
   });
 
+  test('parseUnits rejects a no-digit string instead of silently reading it as zero', () => {
+    // Regression: '', whitespace, a lone dot, and a lone sign carry no digits;
+    // mapping them to 0 silently invented a zero amount/weight from garbage.
+    for (const bad of ['', '   ', '.', '-', '+', '-.', '+.']) {
+      expect(() => parseUnits(bad, 8)).toThrow(RangeError);
+    }
+    // A genuine zero must still parse.
+    expect(parseUnits('0', 8)).toBe(0n);
+    expect(parseUnits('0.0', 8)).toBe(0n);
+  });
+
+  test('toUnits rejects a magnitude past MAX_SAFE_INTEGER instead of a cryptic BigInt failure', () => {
+    // Regression: `toFixed` switches to exponential at 1e21, and any value above
+    // 2^53 has already lost integer precision — reject loudly.
+    expect(() => toUnits(Number.MAX_SAFE_INTEGER + 1, 0)).toThrow(RangeError);
+    expect(() => toUnits(1e21, 18)).toThrow(RangeError);
+    // The seeded pool size stays well within the safe range.
+    expect(toUnits(1_000_000, 18)).toBe(10n ** 24n);
+  });
+
   test('formatUnits always emits exactly `scale` fractional digits', () => {
     expect(formatUnits(5n, 8)).toBe('0.00000005');
     expect(formatUnits(10n ** 8n, 8)).toBe('1.00000000');

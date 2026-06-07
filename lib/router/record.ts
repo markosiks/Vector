@@ -6,6 +6,7 @@ import {
 import type { AgentRow, CapitalAllocationRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
 
+import { AMOUNT_SCALE, parseUnits, WEIGHT_SCALE } from './fixed-point';
 import { route } from './route';
 import type {
   Allocation,
@@ -100,7 +101,9 @@ export interface RecordRouteResult {
 
 /** An allocation worth persisting: it holds capital now or it just lost capital. */
 function isMaterial(a: Allocation): boolean {
-  return Number.parseFloat(a.amount) > 0 || Number.parseFloat(a.prev_weight) > 0;
+  // Parse the canonical fixed-point strings exactly, never through a lossy
+  // `parseFloat` — the same parser the router and ledger use end to end.
+  return parseUnits(a.amount, AMOUNT_SCALE) > 0n || parseUnits(a.prev_weight, WEIGHT_SCALE) > 0n;
 }
 
 /**
