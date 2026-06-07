@@ -4,6 +4,7 @@
  * (a pool or a transaction client) as their first argument.
  */
 export * from './agents';
+export * from './leaderboard';
 export * from './rounds';
 export * from './intents';
 export * from './policy-events';
