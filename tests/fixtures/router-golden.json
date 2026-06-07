@@ -1,0 +1,227 @@
+{
+  "config": {
+    "s_min": 30,
+    "tau": 12,
+    "h": 0.05,
+    "max_step": 0.25,
+    "cooldown_ticks": 3,
+    "pool_size": 1000000
+  },
+  "steps": [
+    {
+      "name": "round-0 bootstrap (equal split)",
+      "agents": [
+        {
+          "agentId": "agent-a",
+          "score": 20,
+          "halted": false,
+          "crashed": false
+        },
+        {
+          "agentId": "agent-b",
+          "score": 20,
+          "halted": false,
+          "crashed": false
+        },
+        {
+          "agentId": "agent-c",
+          "score": 20,
+          "halted": false,
+          "crashed": false
+        }
+      ],
+      "prev": [],
+      "state": {
+        "tick": 0,
+        "cooldownUntilTick": 0
+      },
+      "trigger": "settle",
+      "result": {
+        "allocations": [
+          {
+            "agentId": "agent-a",
+            "amount": "333333.333333333333333334",
+            "target_weight": "0.33333333",
+            "prev_weight": "0.00000000",
+            "delta": "0.33333333",
+            "trigger": "settle"
+          },
+          {
+            "agentId": "agent-b",
+            "amount": "333333.333333333333333333",
+            "target_weight": "0.33333333",
+            "prev_weight": "0.00000000",
+            "delta": "0.33333333",
+            "trigger": "settle"
+          },
+          {
+            "agentId": "agent-c",
+            "amount": "333333.333333333333333333",
+            "target_weight": "0.33333333",
+            "prev_weight": "0.00000000",
+            "delta": "0.33333333",
+            "trigger": "settle"
+          }
+        ],
+        "state": {
+          "tick": 0,
+          "cooldownUntilTick": 3
+        }
+      }
+    },
+    {
+      "name": "settle: capital steps toward leader (clamped by max_step)",
+      "agents": [
+        {
+          "agentId": "agent-a",
+          "score": 70,
+          "halted": false,
+          "crashed": false
+        },
+        {
+          "agentId": "agent-b",
+          "score": 55,
+          "halted": false,
+          "crashed": false
+        },
+        {
+          "agentId": "agent-c",
+          "score": 40,
+          "halted": false,
+          "crashed": false
+        }
+      ],
+      "prev": [
+        {
+          "agentId": "agent-a",
+          "amount": "333333.333333333333333334",
+          "weight": "0.33333333"
+        },
+        {
+          "agentId": "agent-b",
+          "amount": "333333.333333333333333333",
+          "weight": "0.33333333"
+        },
+        {
+          "agentId": "agent-c",
+          "amount": "333333.333333333333333333",
+          "weight": "0.33333333"
+        }
+      ],
+      "state": {
+        "tick": 3,
+        "cooldownUntilTick": 3
+      },
+      "trigger": "settle",
+      "result": {
+        "allocations": [
+          {
+            "agentId": "agent-a",
+            "amount": "583333.333000000000000000",
+            "target_weight": "0.58333333",
+            "prev_weight": "0.33333333",
+            "delta": "0.25000000",
+            "trigger": "settle"
+          },
+          {
+            "agentId": "agent-b",
+            "amount": "255321.776000000000000000",
+            "target_weight": "0.25532178",
+            "prev_weight": "0.33333333",
+            "delta": "-0.07801155",
+            "trigger": "settle"
+          },
+          {
+            "agentId": "agent-c",
+            "amount": "161344.891000000000000000",
+            "target_weight": "0.16134489",
+            "prev_weight": "0.33333333",
+            "delta": "-0.17198844",
+            "trigger": "settle"
+          }
+        ],
+        "state": {
+          "tick": 3,
+          "cooldownUntilTick": 6
+        }
+      }
+    },
+    {
+      "name": "crash: blocked theft -> reputation collapse -> capital reroute",
+      "agents": [
+        {
+          "agentId": "agent-a",
+          "score": 6,
+          "halted": false,
+          "crashed": true
+        },
+        {
+          "agentId": "agent-b",
+          "score": 58,
+          "halted": false,
+          "crashed": false
+        },
+        {
+          "agentId": "agent-c",
+          "score": 46,
+          "halted": false,
+          "crashed": false
+        }
+      ],
+      "prev": [
+        {
+          "agentId": "agent-a",
+          "amount": "583333.333000000000000000",
+          "weight": "0.58333333"
+        },
+        {
+          "agentId": "agent-b",
+          "amount": "255321.776000000000000000",
+          "weight": "0.25532178"
+        },
+        {
+          "agentId": "agent-c",
+          "amount": "161344.891000000000000000",
+          "weight": "0.16134489"
+        }
+      ],
+      "state": {
+        "tick": 4,
+        "cooldownUntilTick": 6
+      },
+      "trigger": "crash",
+      "result": {
+        "allocations": [
+          {
+            "agentId": "agent-a",
+            "amount": "0.000000000000000000",
+            "target_weight": "0.00000000",
+            "prev_weight": "0.58333333",
+            "delta": "-0.58333333",
+            "trigger": "crash"
+          },
+          {
+            "agentId": "agent-b",
+            "amount": "731058.579000000000000000",
+            "target_weight": "0.73105858",
+            "prev_weight": "0.25532178",
+            "delta": "0.47573680",
+            "trigger": "crash"
+          },
+          {
+            "agentId": "agent-c",
+            "amount": "268941.421000000000000000",
+            "target_weight": "0.26894142",
+            "prev_weight": "0.16134489",
+            "delta": "0.10759653",
+            "trigger": "crash"
+          }
+        ],
+        "state": {
+          "tick": 4,
+          "cooldownUntilTick": 7
+        }
+      }
+    }
+  ]
+}
