@@ -40,6 +40,20 @@ export function insertOutcome(db: Queryable, input: NewOutcome): Promise<Outcome
   );
 }
 
+/** Agent-detail read: an agent's most recent outcomes across rounds, newest first. */
+export function listRecentOutcomesByAgent(
+  db: Queryable,
+  agentId: string,
+  limit = 100,
+): Promise<OutcomeRow[]> {
+  return selectMany(
+    db,
+    'SELECT * FROM outcomes WHERE agent_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2',
+    [agentId, limit],
+    outcomeRow,
+  );
+}
+
 export function listOutcomesByAgentRound(
   db: Queryable,
   agentId: string,

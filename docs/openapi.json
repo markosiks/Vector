@@ -1,0 +1,1264 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Vector Read API",
+    "version": "1.5.0",
+    "description": "SWR-pollable read endpoints for the Vector merit layer: leaderboard, agent detail, the policy-event red-alert feed, and ERC-8004 attestations. All responses are `Cache-Control: no-store`. Money/score/capital values are exact decimal strings (never floats). Feeds use keyset pagination ordered `created_at DESC, id DESC`."
+  },
+  "paths": {
+    "/api/leaderboard": {
+      "get": {
+        "summary": "Agents ranked by current AgentScore with current-round allocation",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1..200 (default 50). Out-of-range or non-integer → 400.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked leaderboard with round status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Leaderboard"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}": {
+      "get": {
+        "summary": "One agent: score history, recent intents, decisions, and outcomes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Agent UUID. Malformed → 400; well-formed but unknown → 404.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1..200 (default 50). Out-of-range or non-integer → 400.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent detail.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed agent id or query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No agent with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/policy-events": {
+      "get": {
+        "summary": "Referee decision feed (REJECT/HALT/CLIP/ALLOW), newest first",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1..200 (default 50). Out-of-range or non-integer → 400.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque keyset cursor from a prior `next_cursor`. Malformed → 400.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A keyset page of policy events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PolicyEvent"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Opaque cursor for the next page, or null on the last page."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/attestations": {
+      "get": {
+        "summary": "ERC-8004 attestation mirror, newest first",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1..200 (default 50). Out-of-range or non-integer → 400.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque keyset cursor from a prior `next_cursor`. Malformed → 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "chain_state",
+            "in": "query",
+            "required": false,
+            "description": "Filter by chain state.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "optimistic",
+                "confirmed",
+                "failed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A keyset page of attestations.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Attestation"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Opaque cursor for the next page, or null on the last page."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Round": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "settling",
+              "settled"
+            ]
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "settled_at": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "index",
+          "state",
+          "started_at",
+          "settled_at"
+        ],
+        "additionalProperties": false
+      },
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "strategy_kind": {
+            "type": "string",
+            "enum": [
+              "seed",
+              "external"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "halted",
+              "gated"
+            ]
+          },
+          "score_current": {
+            "type": "string"
+          },
+          "agent_id_onchain": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "owner",
+          "strategy_kind",
+          "status",
+          "score_current",
+          "agent_id_onchain",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "LeaderboardEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "strategy_kind": {
+            "type": "string",
+            "enum": [
+              "seed",
+              "external"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "halted",
+              "gated"
+            ]
+          },
+          "score_current": {
+            "type": "string"
+          },
+          "agent_id_onchain": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "allocation": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "owner",
+          "strategy_kind",
+          "status",
+          "score_current",
+          "agent_id_onchain",
+          "created_at",
+          "allocation"
+        ],
+        "additionalProperties": false
+      },
+      "Leaderboard": {
+        "type": "object",
+        "properties": {
+          "round": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "index": {
+                "type": "integer"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "settling",
+                  "settled"
+                ]
+              },
+              "started_at": {
+                "type": "string"
+              },
+              "settled_at": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "index",
+              "state",
+              "started_at",
+              "settled_at"
+            ],
+            "additionalProperties": false,
+            "nullable": true
+          },
+          "capital_unit": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "strategy_kind": {
+                  "type": "string",
+                  "enum": [
+                    "seed",
+                    "external"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "halted",
+                    "gated"
+                  ]
+                },
+                "score_current": {
+                  "type": "string"
+                },
+                "agent_id_onchain": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "allocation": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "display_name",
+                "owner",
+                "strategy_kind",
+                "status",
+                "score_current",
+                "agent_id_onchain",
+                "created_at",
+                "allocation"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "round",
+          "capital_unit",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Score": {
+        "type": "object",
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "raw_r": {
+            "type": "string"
+          },
+          "score_r": {
+            "type": "string"
+          },
+          "components": {
+            "type": "object",
+            "properties": {
+              "perf": {
+                "type": "number"
+              },
+              "w": {
+                "type": "number"
+              },
+              "policy": {
+                "type": "number"
+              },
+              "dd": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "perf",
+              "w",
+              "policy",
+              "dd"
+            ],
+            "additionalProperties": false,
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "round_id",
+          "raw_r",
+          "score_r",
+          "components",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "Intent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "intent_hash": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "close",
+              "modify",
+              "transfer"
+            ]
+          },
+          "market": {
+            "type": "string",
+            "nullable": true
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "long",
+              "short"
+            ],
+            "nullable": true
+          },
+          "size": {
+            "type": "string",
+            "nullable": true
+          },
+          "leverage": {
+            "type": "string",
+            "nullable": true
+          },
+          "tp": {
+            "type": "string",
+            "nullable": true
+          },
+          "sl": {
+            "type": "string",
+            "nullable": true
+          },
+          "max_slippage": {
+            "type": "string",
+            "nullable": true
+          },
+          "target_address": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "round_id",
+          "intent_hash",
+          "action",
+          "market",
+          "side",
+          "size",
+          "leverage",
+          "tp",
+          "sl",
+          "max_slippage",
+          "target_address",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "PolicyEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "intent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rule_fired": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "ALLOW",
+              "CLIP",
+              "REJECT",
+              "HALT"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "none",
+              "soft",
+              "hard",
+              "halt"
+            ]
+          },
+          "detail": {},
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "intent_id",
+          "agent_id",
+          "round_id",
+          "rule_fired",
+          "decision",
+          "severity",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "Outcome": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "execution_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "pnl_realized": {
+            "type": "string"
+          },
+          "pnl_marked": {
+            "type": "string"
+          },
+          "capital_at_risk": {
+            "type": "string"
+          },
+          "fees": {
+            "type": "string"
+          },
+          "position_delta": {
+            "type": "string"
+          },
+          "drawdown": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "round_id",
+          "execution_id",
+          "pnl_realized",
+          "pnl_marked",
+          "capital_at_risk",
+          "fees",
+          "position_delta",
+          "drawdown",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "Allocation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "target_weight": {
+            "type": "string"
+          },
+          "prev_weight": {
+            "type": "string"
+          },
+          "delta": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "settle",
+              "attestation",
+              "crash",
+              "operator"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "round_id",
+          "amount",
+          "target_weight",
+          "prev_weight",
+          "delta",
+          "trigger",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "Attestation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "value": {
+            "type": "string"
+          },
+          "value_decimals": {
+            "type": "integer"
+          },
+          "tag1": {
+            "type": "string",
+            "nullable": true
+          },
+          "tag2": {
+            "type": "string",
+            "nullable": true
+          },
+          "feedback_uri": {
+            "type": "string",
+            "nullable": true
+          },
+          "feedback_hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "chain_state": {
+            "type": "string",
+            "enum": [
+              "optimistic",
+              "confirmed",
+              "failed"
+            ]
+          },
+          "tx_hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "block_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "round_id",
+          "value",
+          "value_decimals",
+          "tag1",
+          "tag2",
+          "feedback_uri",
+          "feedback_hash",
+          "chain_state",
+          "tx_hash",
+          "block_number",
+          "created_at",
+          "confirmed_at"
+        ],
+        "additionalProperties": false
+      },
+      "AgentDetail": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "strategy_kind": {
+                "type": "string",
+                "enum": [
+                  "seed",
+                  "external"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "halted",
+                  "gated"
+                ]
+              },
+              "score_current": {
+                "type": "string"
+              },
+              "agent_id_onchain": {
+                "type": "string",
+                "nullable": true
+              },
+              "created_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "display_name",
+              "owner",
+              "strategy_kind",
+              "status",
+              "score_current",
+              "agent_id_onchain",
+              "created_at"
+            ],
+            "additionalProperties": false
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "round_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "raw_r": {
+                  "type": "string"
+                },
+                "score_r": {
+                  "type": "string"
+                },
+                "components": {
+                  "type": "object",
+                  "properties": {
+                    "perf": {
+                      "type": "number"
+                    },
+                    "w": {
+                      "type": "number"
+                    },
+                    "policy": {
+                      "type": "number"
+                    },
+                    "dd": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "perf",
+                    "w",
+                    "policy",
+                    "dd"
+                  ],
+                  "additionalProperties": false,
+                  "nullable": true
+                },
+                "created_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "round_id",
+                "raw_r",
+                "score_r",
+                "components",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "intents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "round_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "intent_hash": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "close",
+                    "modify",
+                    "transfer"
+                  ]
+                },
+                "market": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "side": {
+                  "type": "string",
+                  "enum": [
+                    "long",
+                    "short"
+                  ],
+                  "nullable": true
+                },
+                "size": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "leverage": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "tp": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "sl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "max_slippage": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "target_address": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "created_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "round_id",
+                "intent_hash",
+                "action",
+                "market",
+                "side",
+                "size",
+                "leverage",
+                "tp",
+                "sl",
+                "max_slippage",
+                "target_address",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "policy_events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "intent_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "agent_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "round_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "rule_fired": {
+                  "type": "string"
+                },
+                "decision": {
+                  "type": "string",
+                  "enum": [
+                    "ALLOW",
+                    "CLIP",
+                    "REJECT",
+                    "HALT"
+                  ]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "soft",
+                    "hard",
+                    "halt"
+                  ]
+                },
+                "detail": {},
+                "created_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "intent_id",
+                "agent_id",
+                "round_id",
+                "rule_fired",
+                "decision",
+                "severity",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "round_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "execution_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "nullable": true
+                },
+                "pnl_realized": {
+                  "type": "string"
+                },
+                "pnl_marked": {
+                  "type": "string"
+                },
+                "capital_at_risk": {
+                  "type": "string"
+                },
+                "fees": {
+                  "type": "string"
+                },
+                "position_delta": {
+                  "type": "string"
+                },
+                "drawdown": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "round_id",
+                "execution_id",
+                "pnl_realized",
+                "pnl_marked",
+                "capital_at_risk",
+                "fees",
+                "position_delta",
+                "drawdown",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "agent",
+          "scores",
+          "intents",
+          "policy_events",
+          "outcomes"
+        ],
+        "additionalProperties": false
+      },
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Stable machine-readable error code."
+              },
+              "message": {
+                "type": "string",
+                "description": "Safe, user-facing message."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

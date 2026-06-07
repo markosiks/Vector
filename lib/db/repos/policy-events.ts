@@ -5,7 +5,7 @@ import {
   type PolicySeverity,
 } from '../schema';
 import type { Queryable } from '../types';
-import { insertOne, selectMany } from './_shared';
+import { insertOne, type Keyset, keysetBefore, selectMany } from './_shared';
 
 /** Fields accepted when recording a referee decision. */
 export interface NewPolicyEvent {
@@ -41,6 +41,44 @@ export function listRecentPolicyEvents(db: Queryable, limit = 100): Promise<Poli
     db,
     'SELECT * FROM policy_events ORDER BY created_at DESC LIMIT $1',
     [limit],
+    policyEventRow,
+  );
+}
+
+/**
+ * One keyset page of the red-alert feed, newest first. Ordered
+ * `created_at DESC, id DESC` — the `id` tie-break makes paging deterministic
+ * when events share a `created_at` tick (REJECT/HALT bursts write many at once),
+ * which a `created_at`-only order would shuffle across pages. With `before` the
+ * page continues strictly older than that cursor; without it, from the head. The
+ * `created_at DESC` ordering is served by `idx_policy_events_created`.
+ */
+export function listPolicyEventsPage(
+  db: Queryable,
+  limit: number,
+  before?: Keyset,
+): Promise<PolicyEventRow[]> {
+  const params: unknown[] = [];
+  const where = before === undefined ? '' : `WHERE ${keysetBefore(before, params)} `;
+  params.push(limit);
+  return selectMany(
+    db,
+    `SELECT * FROM policy_events ${where}ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
+    params,
+    policyEventRow,
+  );
+}
+
+/** Agent-detail feed: an agent's most recent policy events, newest first. */
+export function listRecentPolicyEventsByAgent(
+  db: Queryable,
+  agentId: string,
+  limit = 100,
+): Promise<PolicyEventRow[]> {
+  return selectMany(
+    db,
+    'SELECT * FROM policy_events WHERE agent_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2',
+    [agentId, limit],
     policyEventRow,
   );
 }
