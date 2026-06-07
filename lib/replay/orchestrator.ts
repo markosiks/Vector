@@ -99,6 +99,27 @@ export interface RunArcResult {
   readonly finalAllocations: readonly ArcAllocation[];
 }
 
+/**
+ * Enforce the single-connection contract (see the module "Concurrency" note).
+ * Each round's settle wraps score + route in one `BEGIN…COMMIT`, which is only
+ * atomic on a dedicated connection. The shared Neon `Pool` also satisfies
+ * `Queryable`, but routes every `.query` to an arbitrary pooled connection — so
+ * `BEGIN`, the per-agent writes, and `COMMIT` could each land on a different
+ * socket, silently dropping the transaction and permitting a non-conserving
+ * partial settle. Reject the bare pool loudly: a pooled *client* (from
+ * `pool.connect()`) exposes `release`; the `Pool` itself does not, and a plain
+ * test fake exposes neither — so only the shared pool is refused.
+ */
+function assertDedicatedClient(db: Queryable): void {
+  const candidate = db as { connect?: unknown; release?: unknown };
+  if (typeof candidate.connect === 'function' && typeof candidate.release !== 'function') {
+    throw new TypeError(
+      'runArc requires a single-connection client (pool.connect()), not the shared pool: ' +
+        'the per-round settle transaction is only atomic on a dedicated connection.',
+    );
+  }
+}
+
 /** Map a validated, typed {@link Intent} to its `intents` table columns. */
 function intentToColumns(
   intent: Intent,
@@ -337,6 +358,7 @@ export async function runArc(
   arc: DemoArc,
   options: RunArcOptions = {},
 ): Promise<RunArcResult> {
+  assertDedicatedClient(db);
   const timing = options.timing ?? CONFIG.timing;
   const validate: ValidateOptions = { resolveSigner: resolveSeedSigner, ...options.validate };
   const rail =
