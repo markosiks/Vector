@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
 
+import type { Pool } from '@neondatabase/serverless';
 import type { NextRequest } from 'next/server';
 
 import { decodeCursor } from '@/lib/api/cursor';
@@ -24,13 +25,13 @@ import {
 // A programmable responder, keyed off the SQL text each repo emits.
 let respond: (sql: string, params?: readonly unknown[]) => Record<string, unknown>[] = () => [];
 
-// Mock only the Neon driver (not `@/lib/db/client`, whose full surface other
-// test files rely on): the real `getPool` builds a pool from this mock, and the
-// repos call `pool.query` directly through the `Queryable` contract.
+// A fake pool injected through the db client's `setPoolForTest` seam. We do NOT
+// `mock.module('@neondatabase/serverless', …)`: Bun links static imports eagerly,
+// so a process-wide driver mock would leak into the real-Neon integration suites
+// when the whole tree runs as one `bun test`. The repos call `pool.query`
+// directly through the `Queryable` contract; the real route + repo SQL + DTO
+// mappers all run — only the Neon round-trip is faked.
 class MockPool {
-  on(): this {
-    return this;
-  }
   async query(
     sql: string,
     params?: readonly unknown[],
@@ -40,10 +41,13 @@ class MockPool {
   }
 }
 
+// `server-only` throws when imported outside an RSC bundle; neutralising it is
+// harmless process-wide (it only makes the marker a no-op) and, unlike the
+// driver, has no real implementation any sibling test depends on.
 mock.module('server-only', () => ({}));
-mock.module('@neondatabase/serverless', () => ({ Pool: MockPool }));
 
 let resetPool: () => void;
+let setPoolForTest: (p: Pool | undefined) => void;
 let prevDbUrl: string | undefined;
 let leaderboardGET: (req: NextRequest) => Promise<Response>;
 let policyEventsGET: (req: NextRequest) => Promise<Response>;
@@ -51,13 +55,18 @@ let attestationsGET: (req: NextRequest) => Promise<Response>;
 let agentGET: (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 
 beforeAll(async () => {
-  // A valid string so eager env validation passes. Restored in `afterAll` so it
-  // never leaks into the integration files' `hasDb` check (bun evaluates each
-  // file lazily just before running it, so a lingering value would un-skip them).
+  // A valid string so eager env validation passes. Use `??=`, never clobber a
+  // real `DATABASE_URL`: this file injects a fake pool, so it never connects, and
+  // overwriting would freeze the process-wide `ENV.DATABASE_URL` to a fake and
+  // break the real-Neon integration probes that run later in a one-process
+  // `bun test`. Restored in `afterAll` so it can't un-skip integration either.
   prevDbUrl = process.env.DATABASE_URL;
-  process.env.DATABASE_URL = 'postgresql://user:pass@host.neon.tech/db?sslmode=require';
-  resetPool = (await import('@/lib/db/client')).resetPool;
+  process.env.DATABASE_URL ??= 'postgresql://user:pass@host.neon.tech/db?sslmode=require';
+  const client = await import('@/lib/db/client');
+  resetPool = client.resetPool;
+  setPoolForTest = client.setPoolForTest;
   resetPool(); // drop any pool a prior file primed with the real driver
+  setPoolForTest(new MockPool() as unknown as Pool); // route handlers `getPool()` → this fake
   leaderboardGET = (await import('@/app/api/leaderboard/route')).GET;
   policyEventsGET = (await import('@/app/api/policy-events/route')).GET;
   attestationsGET = (await import('@/app/api/attestations/route')).GET;
@@ -69,7 +78,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  resetPool(); // don't leak this file's mocked pool to later test files
+  resetPool(); // drop this file's injected pool so later files start clean
   if (prevDbUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = prevDbUrl;
 });
