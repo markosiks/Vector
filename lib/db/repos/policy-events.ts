@@ -69,7 +69,11 @@ export function listPolicyEventsPage(
   );
 }
 
-/** Agent-detail feed: an agent's most recent policy events, newest first. */
+/**
+ * Agent-detail feed: an agent's most recent policy events, newest first. The
+ * `agent_id` filter and `created_at DESC, id DESC` order are served together by
+ * `idx_policy_events_agent_created`.
+ */
 export function listRecentPolicyEventsByAgent(
   db: Queryable,
   agentId: string,
