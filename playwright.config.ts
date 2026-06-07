@@ -8,11 +8,17 @@ import { defineConfig, devices } from '@playwright/test';
  * each other's files. Run the browser suite with `bun run test:e2e:browser`
  * after `bunx playwright install chromium`.
  *
- * The Arena specs script the API at the network layer (`page.route`), so they
- * need only a running Next dev server — no database, no replay engine. The poll
- * cadence is read from the page; the scripted polls reproduce the full arc
- * deterministically. Set `ARENA_BASE_URL` to point at an already-running server,
- * otherwise Playwright starts `next dev` itself.
+ * Two suites share this config:
+ *  - `arena.spec.ts` scripts the API at the network layer (`page.route`), so it
+ *    needs only a running Next dev server — no database, no replay engine. The
+ *    scripted polls reproduce the full arc deterministically.
+ *  - `arena.live.spec.ts` (gated on `ARENA_LIVE=1`) observes the screen while the
+ *    real demo-spine pipeline drives a real Neon database. It is launched by
+ *    `scripts/e2e/arena-live.ts` (`bun run test:e2e:live`), which owns the
+ *    throwaway schema, the dev server, and the paced `runArc(...)`.
+ *
+ * Set `ARENA_BASE_URL` to point at an already-running server (the live
+ * orchestrator does), otherwise Playwright starts `next dev` itself.
  */
 const baseURL = process.env.ARENA_BASE_URL ?? 'http://localhost:3000';
 

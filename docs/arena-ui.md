@@ -99,7 +99,32 @@ app/arena/        page.tsx · Arena.tsx (orchestrator) · Leaderboard · AgentRo
 | Unit | `bun run test:unit` | `tests/unit/arena.*` — pure logic, ~96% line coverage |
 | Fuzz | `bun run test:fuzz` | `tests/fuzz/arena.fuzz.test.ts` — random data + jittery polling; invariants: total order, finite/bounded flows, at-most-once flash over a monotonic feed |
 | Browser e2e | `bun run test:e2e:browser` | `tests/browser/arena.spec.ts` (Playwright) — drives the full arc with the API scripted at the network layer (`page.route`), so it needs only a Next dev server, no database |
+| Live e2e | `DATABASE_URL=… bun run test:e2e:live` | `tests/browser/arena.live.spec.ts`, orchestrated by `scripts/e2e/arena-live.ts` — **no mocks.** Drives the real demo-spine pipeline against a real Postgres while the browser polls the real API |
 
 The Playwright suite lives in `tests/browser/` (its own runner), **separate from**
 `tests/e2e/` which is the bun-test API suite (`bun run test:e2e`). First run:
+`bunx playwright install chromium`.
+
+### Live e2e
+
+`test:e2e:live` proves the screen against the **real pipeline + real Postgres** —
+nothing is mocked. `scripts/e2e/arena-live.ts` owns the moving parts the spec must
+not know about:
+
+- It runs inside a **throwaway schema** wired into every connection via the URL's
+  `options=-c search_path=<schema>,public`, so the run never touches `public` and
+  the schema is dropped on exit (even on failure). Point `DATABASE_URL` at any
+  Postgres (e.g. Neon).
+- It seeds the cold-start board, starts `next dev` against that schema, then drives
+  a **paced** `runArc(...)` whose round settles are slowed so the browser's poll
+  cadence observes each transition.
+- The cold-start board is a transient, so the arc is **gated** behind a one-shot
+  control endpoint: the spec asserts the opening board, then hits
+  `ARENA_CONTROL_URL/start` to release it. This makes the opening state
+  deterministic rather than racing the pipeline against Playwright cold-start /
+  lazy route compilation. Everything the arc unfolds afterwards (the persisted
+  red-flash, the settled crash) survives the poll cadence, so the rest of the
+  assertions lean on Playwright's retrying `expect`.
+
+The exit code is the Playwright result, so it is CI-usable. First run:
 `bunx playwright install chromium`.
