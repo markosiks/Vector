@@ -52,6 +52,9 @@ when the referee blocks a theft in the demo.
 | `max_step`       | number | `0.25`  | Max fraction of the pool moved per reallocation. |
 | `cooldown_ticks` | int    | `3`     | Cooldown (ticks) after a large reallocation. |
 
+The allocation rule, anti-oscillation mechanisms, forced gate-out, bootstrap, and
+the conservation invariant are documented in [capital-router.md](./capital-router.md).
+
 ## Ticks & polling — §7.3
 
 | Name             | Type | Default | Meaning |
