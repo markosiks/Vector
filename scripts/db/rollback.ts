@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { loadMigrations, migrate, MIGRATIONS_DIR } from '@/lib/db/migrate';
 
-import { poolFromEnv } from './_pool';
+import { assertDestructiveAllowed, poolFromEnv } from './_pool';
 
 /**
  * Roll back migrations. Usage:
@@ -26,6 +26,11 @@ async function main(): Promise<void> {
     if (!Number.isInteger(steps) || steps < 1) throw new Error(`invalid step count: ${args[0]}`);
     opts = { direction: 'down', steps };
   }
+
+  // `--all` / `--to 0` rolls every migration down (DROP all tables): a full
+  // teardown, guarded like `db:reset`. Bounded N-step / to-version rollbacks
+  // are intentional, lower-blast-radius operations and stay unguarded.
+  if (opts.to === '0') assertDestructiveAllowed('db:rollback --all');
 
   const pool = poolFromEnv();
   try {

@@ -3,7 +3,7 @@ import { loadMigrations, migrate, MIGRATIONS_DIR } from '@/lib/db/migrate';
 import { seedSmoke } from '@/lib/db/seed';
 import type { Queryable } from '@/lib/db/types';
 
-import { poolFromEnv } from './_pool';
+import { assertDestructiveAllowed, poolFromEnv } from './_pool';
 
 /**
  * Idempotent full reset: roll every migration down, re-apply all forward, then
@@ -11,6 +11,7 @@ import { poolFromEnv } from './_pool';
  * Destructive (drops all data). Usage: `bun run db:reset`.
  */
 async function main(): Promise<void> {
+  assertDestructiveAllowed('db:reset');
   const pool = poolFromEnv();
   try {
     const migrations = loadMigrations(MIGRATIONS_DIR);
