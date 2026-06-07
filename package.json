@@ -15,6 +15,7 @@
     "test:fuzz": "bun test tests/fuzz",
     "test:integration": "bun test tests/integration",
     "test:e2e": "bun test tests/e2e",
+    "test:e2e:browser": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:migrate": "bun run scripts/db/migrate.ts",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.60.0",
     "@types/bun": "^1.1.14",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
