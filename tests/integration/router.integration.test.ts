@@ -160,4 +160,44 @@ describeDb('capital router persistence (isolated schema on real Neon)', () => {
     expect(rows.map((r) => r.agent_id)).toEqual([live.id]); // dormant omitted
     expect(Number(rows[0]?.amount)).toBeGreaterThan(0);
   });
+
+  test('re-running recordRoute for the same round is idempotent (no duplicate rows, pool stays conserved)', async () => {
+    const x = await insertAgent(db, {
+      display_name: 'idem-x',
+      owner: 'ops',
+      strategy_kind: 'seed',
+      score_current: '75',
+    });
+    const y = await insertAgent(db, {
+      display_name: 'idem-y',
+      owner: 'ops',
+      strategy_kind: 'seed',
+      score_current: '50',
+    });
+    const round = await insertRound(db, { index: nextIndex() });
+    const agents = deriveRouterAgents(
+      (await listAgentsByScore(db)).filter((row) => row.id === x.id || row.id === y.id),
+    );
+    const args = {
+      db,
+      roundId: round.id,
+      agents,
+      prev: [] as Awaited<ReturnType<typeof loadPrevAllocations>>,
+      state: { tick: 0, cooldownUntilTick: 0 },
+      trigger: 'settle' as const,
+    };
+
+    const first = await recordRoute(args);
+    // Simulate a settlement retry: the same round is recorded a second time.
+    const second = await recordRoute(args);
+
+    const rows = await listAllocationsByRound(db, round.id);
+    // The unique constraint + ON CONFLICT DO NOTHING means no duplicate rows.
+    expect(rows.length).toBe(first.rows.length);
+    expect(rows.length).toBe(2);
+    // The pool is conserved exactly — not doubled by the retry.
+    expect(rows.reduce((acc, row) => acc + amountUnits(row.amount), 0n)).toBe(POOL_UNITS);
+    // The retry returns the authoritative persisted ledger, not a partial set.
+    expect([...second.rows].map((r) => r.id).sort()).toEqual([...rows].map((r) => r.id).sort());
+  });
 });

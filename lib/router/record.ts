@@ -69,8 +69,9 @@ export async function loadPrevAllocations(
   roundId: string,
 ): Promise<PrevAllocation[]> {
   const rows = await listAllocationsByRound(db, roundId);
-  // One round writes at most one allocation per agent; if a re-routed round wrote
-  // several (settle then crash), the last row is the agent's standing position.
+  // `UNIQUE (agent_id, round_id)` guarantees at most one row per agent per round,
+  // so each agent's standing position is unambiguous (the dedup below is purely
+  // defensive and never collapses distinct positions).
   const byAgent = new Map<string, PrevAllocation>();
   for (const r of rows) {
     byAgent.set(r.agent_id, { agentId: r.agent_id, amount: r.amount, weight: r.target_weight });
@@ -107,31 +108,46 @@ function isMaterial(a: Allocation): boolean {
  * every *material* allocation — an agent that holds capital now or that just had
  * it drained (a zero row for an agent that was and stays empty is noise, so it
  * is skipped). Returns the pure {@link RouteResult} (including the next cooldown
- * state for the caller to persist) and the inserted rows.
+ * state for the caller to persist) and the persisted rows.
  *
  * Conservation is a property of the *full* result (`Σ amount == pool_size`);
  * filtering immaterial zero rows from the ledger does not change it, since those
  * rows carry no capital.
+ *
+ * **Atomicity & idempotency.** The N inserts are a single logical write: the
+ * caller MUST pass a transaction-bound `Queryable` (a client inside one
+ * `BEGIN…COMMIT`) so a mid-loop failure rolls the whole round back rather than
+ * leaving a partial, non-conserving round persisted. Each insert is also
+ * idempotent against `UNIQUE (agent_id, round_id)` (`ON CONFLICT DO NOTHING`,
+ * mirroring `insertScore`): a re-run of an already-recorded round writes nothing
+ * and instead returns the rows already on the ledger, so a settlement retry is
+ * safe.
  */
 export async function recordRoute(args: RecordRouteArgs): Promise<RecordRouteResult> {
   const config = args.config ?? defaultRouterConfig();
   const result = route(args.agents, args.prev, args.state, config, args.trigger);
 
   const rows: CapitalAllocationRow[] = [];
+  let conflict = false;
   for (const a of result.allocations) {
     if (!isMaterial(a)) continue;
-    rows.push(
-      await insertCapitalAllocation(args.db, {
-        agent_id: a.agentId,
-        round_id: args.roundId,
-        amount: a.amount,
-        target_weight: a.target_weight,
-        prev_weight: a.prev_weight,
-        delta: a.delta,
-        trigger: a.trigger,
-      }),
-    );
+    const row = await insertCapitalAllocation(args.db, {
+      agent_id: a.agentId,
+      round_id: args.roundId,
+      amount: a.amount,
+      target_weight: a.target_weight,
+      prev_weight: a.prev_weight,
+      delta: a.delta,
+      trigger: a.trigger,
+    });
+    if (row === null) {
+      // The round was already recorded (idempotent retry): stop trusting this
+      // pass's partial inserts and return the authoritative persisted ledger.
+      conflict = true;
+      continue;
+    }
+    rows.push(row);
   }
 
-  return { result, rows };
+  return { result, rows: conflict ? await listAllocationsByRound(args.db, args.roundId) : rows };
 }
