@@ -78,7 +78,9 @@ describeDb('Vector data model (isolated schema on real Neon)', () => {
     for (const i of [
       'idx_agents_score_current',
       'idx_policy_events_created',
-      'idx_attestations_chain_state',
+      'idx_policy_events_agent_created',
+      'idx_attestations_created',
+      'idx_attestations_chain_state_created',
       'idx_intents_agent_created',
     ]) {
       expect(idxNames.has(i)).toBe(true);
