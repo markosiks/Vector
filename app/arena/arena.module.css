@@ -1,0 +1,296 @@
+/*
+ * Arena / Leaderboard styling — tuned for a projector / demo screen: large type,
+ * high contrast, and generous spacing so it reads from across a room. All motion
+ * is disabled under `prefers-reduced-motion` (see the bottom of this file).
+ *
+ * The capital bar's width and the row's transform are animated via CSS
+ * transitions; their *durations* are set inline from the seeded config
+ * (`flowDurationMs`) so timing stays single-sourced. This file owns only the
+ * easing curve and the colour/scale of each state.
+ */
+
+.screen {
+  --bg: #0a0e17;
+  --panel: #121826;
+  --edge: #1f2a3d;
+  --text: #e8eef9;
+  --muted: #8a98b3;
+  --leader: #36d399;
+  --bar: #2b6cff;
+  --bar-soft: #21407a;
+  --crash: #ff4d4f;
+  --flash: #ff1f3d;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1rem, 3vw, 3rem);
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: clamp(1rem, 2vw, 2rem);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.6rem, 3.2vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.round {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: clamp(0.9rem, 1.4vw, 1.2rem);
+  color: var(--muted);
+}
+
+.roundState {
+  padding: 0.15em 0.7em;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  font-size: 0.8em;
+  color: var(--text);
+}
+
+.board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 3ch minmax(8rem, 1.4fr) 2.6fr minmax(7rem, auto);
+  align-items: center;
+  gap: clamp(0.6rem, 1.5vw, 1.4rem);
+  padding: clamp(0.6rem, 1.2vw, 1rem) clamp(0.8rem, 1.6vw, 1.4rem);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.leaderRow {
+  border-color: color-mix(in srgb, var(--leader) 55%, var(--edge));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--leader) 35%, transparent);
+}
+
+.rank {
+  font-size: clamp(1.1rem, 2vw, 1.7rem);
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.leaderRow .rank {
+  color: var(--leader);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.name {
+  font-size: clamp(1rem, 1.7vw, 1.4rem);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner {
+  font-size: clamp(0.72rem, 1.1vw, 0.92rem);
+  color: var(--muted);
+}
+
+.statusTag {
+  margin-left: 0.5ch;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+
+.statusActive {
+  background: color-mix(in srgb, var(--leader) 22%, transparent);
+  color: var(--leader);
+}
+
+.statusGated,
+.statusHalted {
+  background: color-mix(in srgb, var(--crash) 22%, transparent);
+  color: var(--crash);
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.barTrack {
+  position: relative;
+  height: clamp(0.7rem, 1.2vw, 1rem);
+  background: var(--bar-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--bar);
+  /* width transition duration is set inline from flowDurationMs */
+  transition:
+    width 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 500ms ease;
+}
+
+.scoreFill {
+  background: var(--leader);
+}
+
+.crashed .scoreFill,
+.crashed .barFill {
+  background: var(--crash);
+}
+
+.barLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(0.72rem, 1.1vw, 0.92rem);
+  color: var(--muted);
+}
+
+.metric {
+  text-align: right;
+}
+
+.metricValue {
+  font-size: clamp(1.1rem, 2vw, 1.7rem);
+  font-weight: 800;
+}
+
+.metricUnit {
+  font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+  color: var(--muted);
+}
+
+/* Per-row red flash on REJECT/HALT. */
+.flashRow {
+  animation: rowFlash 700ms ease-out;
+}
+
+@keyframes rowFlash {
+  0% {
+    box-shadow:
+      0 0 0 2px var(--flash),
+      0 0 28px 4px color-mix(in srgb, var(--flash) 60%, transparent);
+    background: color-mix(in srgb, var(--flash) 14%, var(--panel));
+  }
+  100% {
+    box-shadow: none;
+    background: var(--panel);
+  }
+}
+
+/* Screen-level flash overlay on a policy block. */
+.flashOverlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    color-mix(in srgb, var(--flash) 38%, transparent) 100%
+  );
+  opacity: 0;
+  z-index: 50;
+}
+
+.flashOverlayActive {
+  animation: screenFlash 650ms ease-out;
+}
+
+@keyframes screenFlash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.flashBanner {
+  position: fixed;
+  top: clamp(0.8rem, 2vw, 1.6rem);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5em 1.2em;
+  background: var(--flash);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  z-index: 51;
+  box-shadow: 0 8px 30px color-mix(in srgb, var(--flash) 50%, transparent);
+}
+
+.states {
+  padding: 2rem 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.6vw, 1.3rem);
+}
+
+.error {
+  color: var(--crash);
+}
+
+/* Accessibility: respect a reduced-motion preference — no slides, no strobe. */
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .barFill {
+    transition: none !important;
+  }
+  .flashRow,
+  .flashOverlayActive {
+    animation: none !important;
+  }
+  /* Keep the signal without the motion: a static red edge on a flashed row. */
+  .flashRow {
+    box-shadow: 0 0 0 2px var(--flash);
+  }
+  .flashOverlayActive {
+    opacity: 1;
+  }
+}
