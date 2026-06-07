@@ -7,9 +7,12 @@ the **conservation invariant**, and the `capital_allocations` row contract.
 The implementation is a pure function, `lib/router/route.ts#route`, plus a thin
 persistence layer, `lib/router/record.ts`. `route()` performs no I/O, reads no
 clock, and uses no randomness, so a fixed input yields a **bit-identical** result
-on every run (the §6.5 determinism mandate). All amounts and weights are carried
-end-to-end as fixed-scale decimal **strings** over BigInt arithmetic
-(`lib/router/fixed-point.ts`) — never floats — so a row is exactly reproducible.
+on every run **on a given runtime** (the §6.5 determinism mandate). All amounts
+and weights are carried end-to-end as fixed-scale decimal **strings** over BigInt
+arithmetic (`lib/router/fixed-point.ts`) — never floats — so a row is exactly
+reproducible. The one floating-point step is the softmax `Math.exp`, whose last
+ULP is not guaranteed identical across JS engines / CPUs; pin cross-host replay
+to a single runtime.
 
 ## What it does
 
@@ -53,8 +56,14 @@ never normalized into a silent allocation.
 4. **Max-step.** A single global factor `λ = min(1, max_step / move)` caps the
    fraction of the pool relocated this pass (`move` = ½·Σ|target−prev|, the
    relocated fraction). Because `λ ≤ 1`, the update `next = prev + λ·(target−prev)`
-   is **monotone** toward target and can never overshoot — the structural reason
-   the allocation cannot oscillate.
+   is **monotone** toward the *current* target and can never overshoot it within
+   a step. Note the precise guarantee: max-step rules out per-step overshoot, not
+   all cross-round motion. If an adversary pays the performance cost to oscillate
+   their *own* score, the target moves and the allocation tracks it — hysteresis
+   (`h`) and cooldown **bound and damp** that swing, they do not eliminate it.
+   There is no value-creating ratchet: per-step moves are symmetric and the pool
+   is conserved every pass, so oscillating inputs yield oscillating, not
+   accumulating, outputs.
 5. **Cooldown.** After a clamped (large) move, discretionary rebalancing pauses
    for `cooldown_ticks`; only forced gate-outs and the cold-start fill move during
    a cooldown.
@@ -129,6 +138,12 @@ capital flow — there is no second "ideal vs. realized" weight to drift apart. 
 internal softmax "ideal" (where capital would settle at `λ = 1`) is not persisted;
 it is recovered by re-running `route` with `max_step = 1`.
 
+**`amount` is the source of truth, not `target_weight`.** Each `target_weight` is
+`amount / pool_size` quantized half-up to 8 dp independently, so the per-agent
+weights need not sum to exactly `1.00000000` (they drift by up to ±½ ULP per
+agent). Conservation is asserted on `Σ amount == pool_size` exactly; never derive
+capital or a conservation check from `target_weight`.
+
 ## `capital_allocations` row contract
 
 `record.ts` writes one row per **material** allocation (an agent that holds
@@ -156,7 +171,8 @@ rather than persisting a partial, non-conserving set.
 ## Determinism
 
 `route` is pure and the arithmetic is integer/BigInt, so a fixed input is
-bit-identical across runs (locked by `tests/unit/router.golden.test.ts` against
+bit-identical across runs on a given runtime (locked by
+`tests/unit/router.golden.test.ts` against
 `tests/fixtures/router-golden.json` — the deterministic demo arc: bootstrap →
 merit step → crash reroute). Conservation, non-negativity, the max-step bound,
 eligibility, and no-oscillation-after-cooldown are property-fuzzed over thousands
