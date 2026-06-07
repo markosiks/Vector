@@ -146,9 +146,12 @@ domains:
 
 - Leaderboard: `idx_agents_score_current` on `agents(score_current DESC)`.
 - Agent detail: `idx_intents_agent_created` on `intents(agent_id, created_at DESC)`;
+  `idx_policy_events_agent_created` on `policy_events(agent_id, created_at DESC, id DESC)`;
   `idx_outcomes_agent_round`; `scores(agent_id, round_id)` (unique).
 - Policy feed by time: `idx_policy_events_created`, `idx_policy_events_round_created`.
-- Attestation reconcile: `idx_attestations_chain_state`.
+- Attestation feed: `idx_attestations_created` on `attestations(created_at DESC, id DESC)`;
+  `idx_attestations_chain_state_created` on `attestations(chain_state, created_at DESC, id DESC)`
+  (serves both the `chain_state`-filtered feed and the reconcile read).
 - Plus FK-supporting indexes on `round_id` / `intent_id` columns.
 
 ## Repository layer

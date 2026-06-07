@@ -75,8 +75,9 @@ export interface AttestationPageParams {
 
 /**
  * One keyset page of attestations for the UI, newest first
- * (`created_at DESC, id DESC`). Optionally filtered to one `chain_state` — the
- * filter is served by `idx_attestations_chain_state`. The `id` tie-break keeps
+ * (`created_at DESC, id DESC`), served by `idx_attestations_created`. Optionally
+ * filtered to one `chain_state`, in which case `idx_attestations_chain_state_created`
+ * serves the filter and the same order in one index. The `id` tie-break keeps
  * paging deterministic when a batch reconcile stamps many rows with the same
  * `created_at`. Filter and cursor are independent and compose.
  */
