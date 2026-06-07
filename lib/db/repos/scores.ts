@@ -60,6 +60,26 @@ export function listScoresByAgent(db: Queryable, agentId: string): Promise<Score
 }
 
 /**
+ * Score history for the agent-detail EWMA chart, oldest round first.
+ *
+ * Ordered by `rounds.index` (the monotonic round ordinal), **not** `created_at`
+ * — the same reason {@link getLatestScoreByAgent} chains off the round, not the
+ * wall clock: under backfill, replayed/out-of-order settlement, or same-tx ties
+ * (identical `created_at`), insertion order diverges from round order and would
+ * render the EWMA curve out of sequence. The `scores.id` tie-break keeps the
+ * order total even if two rounds somehow shared an index in malformed data.
+ */
+export function listScoreHistoryByAgent(db: Queryable, agentId: string): Promise<ScoreRow[]> {
+  return selectMany(
+    db,
+    `SELECT s.* FROM scores s JOIN rounds r ON r.id = s.round_id
+     WHERE s.agent_id = $1 ORDER BY r.index ASC, s.id ASC`,
+    [agentId],
+    scoreRow,
+  );
+}
+
+/**
  * The agent's score from the highest-numbered round, or `null` if it has never
  * been scored. The EWMA recursion reads its `score_r` as `Score_{r−1}`; a `null`
  * means the caller seeds the recursion with the low `score_0` prior (§6.1).
