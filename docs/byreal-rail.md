@@ -53,7 +53,11 @@ The CLI was installed and probed against the live read-only API:
   `HOME` — **not** a pure env var. The adapter therefore (a) requires the
   operator to provision a testnet account and (b) refuses `mainnet` credentials
   unless `BYREAL_PERPS_NETWORK=mainnet` is set *and* `allowMainnet` is passed, so
-  a misconfiguration can never place real-money orders.
+  a misconfiguration can never place real-money orders. As defense-in-depth the
+  child env also carries `BYREAL_PERPS_NETWORK` pinned to the validated network;
+  this only hardens CLI versions that honour the var — the load-bearing guard
+  remains the construction-time refusal of `mainnet` credentials. Operators must
+  still ensure the provisioned `HOME` account points at testnet.
 
 **Caveat (operator action required for a live round-trip):** a *funded* testnet
 Solana/Privy account cannot be self-provisioned autonomously. The DoD's live
