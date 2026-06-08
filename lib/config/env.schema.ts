@@ -53,6 +53,28 @@ const rpcUrl = z
     { message: 'must be an http(s) or ws(s) URL' },
   );
 
+/**
+ * A servable http(s) base URL. Unlike {@link rpcUrl} it rejects ws(s): the only
+ * consumer ({@link buildFeedbackUri}) emits an on-chain `feedbackURI` that must
+ * be fetchable over HTTP, so a websocket scheme is never valid here.
+ */
+const httpUrl = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_URL_LEN)
+  .refine(
+    (value) => {
+      try {
+        const { protocol } = new URL(value);
+        return protocol === 'http:' || protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    { message: 'must be an http(s) URL' },
+  );
+
 /** A non-empty secret string with a sane length bound. */
 const secret = z.string().trim().min(1).max(MAX_URL_LEN);
 
@@ -85,7 +107,7 @@ export const envSchema = z.object({
    * off-chain attestation detail (P1.8). Non-secret. Optional until the write
    * path needs it; validated as an http(s) URL if set.
    */
-  PUBLIC_BASE_URL: rpcUrl.optional(),
+  PUBLIC_BASE_URL: httpUrl.optional(),
   /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
   GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
 });
