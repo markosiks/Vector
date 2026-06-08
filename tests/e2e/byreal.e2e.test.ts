@@ -54,7 +54,12 @@ function stub(name: string, body: string): string {
   return path;
 }
 
-const req = (intent: Intent): RailRequest => ({ intent, agentId: 'a', tickIndex: 0, intentHash: 'h' });
+const req = (intent: Intent): RailRequest => ({
+  intent,
+  agentId: 'a',
+  tickIndex: 0,
+  intentHash: 'h',
+});
 
 describe('byreal rail behind settleWithFallback — the arc never stalls', () => {
   test('a real fill is recorded (degraded:false)', async () => {

@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { parseEnvelope, ByrealParseError } from '@/lib/rail/byreal/envelope';
-import {
-  buildOutcome,
-  findPosition,
-  parseOrderResult,
-} from '@/lib/rail/byreal/parse';
+import { buildOutcome, findPosition, parseOrderResult } from '@/lib/rail/byreal/parse';
 
 /**
  * Unit: turning untrusted CLI stdout into a typed envelope and mapping the
@@ -165,7 +161,13 @@ describe('findPosition', () => {
 });
 
 describe('buildOutcome', () => {
-  const order = { orderId: '1', status: 'filled' as const, filledSize: '0.01', realizedPnl: '0', fees: '0.5' };
+  const order = {
+    orderId: '1',
+    status: 'filled' as const,
+    filledSize: '0.01',
+    realizedPnl: '0',
+    fees: '0.5',
+  };
 
   test('open long: positive delta, position economics, drawdown always 0', () => {
     const o = buildOutcome({

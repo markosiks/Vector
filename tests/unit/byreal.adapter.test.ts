@@ -41,7 +41,10 @@ function envelope(data: unknown): ByrealCliResult {
 
 /** A recording CLI runner that answers `order` and `position` commands. */
 function mockRunner(
-  handlers: { order?: ByrealCliResult | (() => never); position?: ByrealCliResult | (() => never) } = {},
+  handlers: {
+    order?: ByrealCliResult | (() => never);
+    position?: ByrealCliResult | (() => never);
+  } = {},
 ): { run: ByrealCliRunner; calls: string[][] } {
   const calls: string[][] = [];
   const run: ByrealCliRunner = async (subArgv) => {
@@ -62,7 +65,12 @@ function mockRunner(
 }
 
 function req(intent: Intent, intentHash?: string): RailRequest {
-  return { intent, agentId: 'a', tickIndex: 0, ...(intentHash === undefined ? {} : { intentHash }) };
+  return {
+    intent,
+    agentId: 'a',
+    tickIndex: 0,
+    ...(intentHash === undefined ? {} : { intentHash }),
+  };
 }
 
 describe('createByrealRail — construction safety', () => {
@@ -95,7 +103,9 @@ describe('execute — defers to seed (null) without calling the CLI', () => {
   test('an unmapped market defers', async () => {
     const m = mockRunner();
     const rail = createByrealRail({ credentials: CREDS, runCli: m.run });
-    expect(await rail.execute(req({ ...OPEN, market: 'SOL-PERP' } as unknown as Intent))).toBeNull();
+    expect(
+      await rail.execute(req({ ...OPEN, market: 'SOL-PERP' } as unknown as Intent)),
+    ).toBeNull();
     expect(m.calls).toHaveLength(0);
   });
 });
@@ -145,7 +155,10 @@ describe('execute — failures surface for the seed fallback', () => {
   test('a non-success envelope throws ByrealRailError carrying the code', async () => {
     const m = mockRunner({
       order: {
-        stdout: JSON.stringify({ success: false, error: { code: 'NO_LIQUIDITY', message: 'empty' } }),
+        stdout: JSON.stringify({
+          success: false,
+          error: { code: 'NO_LIQUIDITY', message: 'empty' },
+        }),
         stderr: '',
         code: 1,
       },
