@@ -29,6 +29,11 @@ const positiveInt = z.number().int().positive();
 /** An `http(s)` URL string. */
 const httpUrl = z.string().url().startsWith('http');
 
+/** A 0x-prefixed Ethereum address (42 hex chars). */
+const ethAddress = z
+  .string()
+  .regex(/^0x[0-9a-fA-F]{40}$/, 'must be a 0x-prefixed 40-hex-char Ethereum address');
+
 /**
  * Scoring constants — §6.1. Penalties are intentionally asymmetric so a single
  * `hard` violation dominates any positive performance and reputation collapses.
@@ -151,6 +156,22 @@ export const chainSchema = z.object({
   mantle_explorer_base_url: httpUrl,
 });
 
+/**
+ * ERC-8004 Reputation Registry on-chain addresses — P1.7 / §9.4 / §15.
+ *
+ * These are the canonical CREATE2-deterministic singleton addresses for the
+ * testnet registries. They are non-secret configuration, safe on both server
+ * and client.
+ */
+export const erc8004Schema = z.object({
+  /** Canonical Reputation Registry address on Mantle Sepolia testnet. */
+  reputation_registry: ethAddress,
+  /** Canonical Identity Registry address on Mantle Sepolia testnet. */
+  identity_registry: ethAddress,
+  /** Block number the Reputation Registry was deployed at (for event indexing). */
+  reputation_deploy_block: positiveInt,
+});
+
 /** The full seeded-config schema. */
 export const configSchema = z.object({
   scoring: scoringSchema,
@@ -161,6 +182,7 @@ export const configSchema = z.object({
   policy: policySchema,
   capital: capitalSchema,
   chain: chainSchema,
+  erc8004: erc8004Schema,
 });
 
 /** The validated, structurally-typed shape of the seeded config. */

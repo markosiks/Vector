@@ -89,6 +89,15 @@ const RAW_CONFIG = {
     mantle_testnet_chain_id: 5003,
     mantle_explorer_base_url: 'https://explorer.sepolia.mantle.xyz',
   },
+  // ── ERC-8004 Reputation Registry (P1.7) ─────────────────────────────────
+  // Canonical CREATE2-deterministic singleton addresses on Mantle Sepolia.
+  // Source: erc-8004.quicknode.com/docs/contracts (verified 2026-06-08).
+  // VERIFY V2 resolved: canonical registry EXISTS — no custom deploy needed.
+  erc8004: {
+    reputation_registry: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
+    identity_registry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
+    reputation_deploy_block: 34_586_937,
+  },
 };
 
 /**

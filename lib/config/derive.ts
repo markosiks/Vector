@@ -20,3 +20,23 @@ export function isEligible(score: number): boolean {
 export function explorerTxUrl(txHash: string): string {
   return `${CONFIG.chain.mantle_explorer_base_url}/tx/${txHash}`;
 }
+
+/** Build an explorer URL for a contract address on Mantle testnet. */
+export function explorerAddressUrl(address: string): string {
+  return `${CONFIG.chain.mantle_explorer_base_url}/address/${address}`;
+}
+
+/** The ERC-8004 Reputation Registry address from the single source of truth. */
+export function reputationRegistryAddress(): string {
+  return CONFIG.erc8004.reputation_registry;
+}
+
+/** The ERC-8004 Identity Registry address from the single source of truth. */
+export function identityRegistryAddress(): string {
+  return CONFIG.erc8004.identity_registry;
+}
+
+/** The deploy block for the Reputation Registry (for event indexing start). */
+export function reputationDeployBlock(): number {
+  return CONFIG.erc8004.reputation_deploy_block;
+}
