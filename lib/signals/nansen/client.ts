@@ -30,6 +30,16 @@ const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 /** Hard cap on normalized rows kept from a response (bounds downstream work). */
 const DEFAULT_MAX_ROWS = 50;
 
+/**
+ * Hard cap on raw rows *scanned* while normalizing — independent of how many
+ * survive. Without it, a hostile/compromised upstream can send a 2 MiB array of
+ * unusable rows (e.g. hundreds of thousands of `{}`) and force a long run of
+ * synchronous `safeParse` calls that starves the event loop. The fetch is
+ * detached so the tick is never blocked, but the whole process would still
+ * stall; this bound keeps the scan cheap regardless of input.
+ */
+const MAX_ROWS_SCANNED = 5_000;
+
 /** Base class for every Nansen client failure. */
 export class NansenClientError extends Error {}
 
@@ -156,6 +166,21 @@ function normalizeRow(raw: unknown): NansenNetflow | null {
   };
 }
 
+/** Largest `Retry-After` we will report (ms). Clamps a hostile/huge header. */
+const MAX_RETRY_AFTER_MS = 5 * 60 * 1_000;
+
+/**
+ * Parse a `Retry-After` header (delta-seconds) into a sane positive ms value,
+ * or `undefined`. Rejects non-finite/negative input and clamps absurd values so
+ * a compromised upstream cannot inject a multi-year or negative delay.
+ */
+function parseRetryAfterMs(header: string | null): number | undefined {
+  if (header === null) return undefined;
+  const seconds = Number(header);
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return Math.min(seconds * 1_000, MAX_RETRY_AFTER_MS);
+}
+
 /** Read the body as text under a hard byte cap, then `JSON.parse`. */
 async function readJsonBounded(res: Response): Promise<unknown> {
   const declared = Number(res.headers.get('content-length') ?? '');
@@ -163,8 +188,12 @@ async function readJsonBounded(res: Response): Promise<unknown> {
     throw new NansenParseError(`response too large (${declared} bytes)`);
   }
   const text = await res.text();
-  if (text.length > MAX_RESPONSE_BYTES) {
-    throw new NansenParseError(`response too large (${text.length} bytes)`);
+  // Measure UTF-8 byte length (not UTF-16 code-unit `.length`) so the memory
+  // bound holds for multi-byte payloads. `Buffer.byteLength` counts without
+  // allocating a second copy of the body.
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes > MAX_RESPONSE_BYTES) {
+    throw new NansenParseError(`response too large (${bytes} bytes)`);
   }
   try {
     return JSON.parse(text);
@@ -191,10 +220,16 @@ export function createNansenClient(deps: NansenClientDeps): NansenClient {
   async function fetchSignal(): Promise<NansenSignal> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
+    // One try spans the *entire* round-trip — connect, status checks, AND body
+    // read — so the timeout/abort covers a slow-drip body, not just the headers.
+    // Typed failures (`NansenClientError` subclasses) pass through unchanged; an
+    // abort anywhere becomes a timeout; anything else is a generic client error.
     try {
-      res = await fetchImpl(url, {
+      const res = await fetchImpl(url, {
         method: 'POST',
+        // Single-endpoint credentialed call: never follow a redirect, which
+        // could resend the `apiKey` header to an attacker-controlled origin.
+        redirect: 'error',
         headers: {
           'content-type': 'application/json',
           // Secret lives only in this header, for this request. Never logged.
@@ -203,7 +238,31 @@ export function createNansenClient(deps: NansenClientDeps): NansenClient {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+
+      if (res.status === 429) {
+        throw new NansenRateLimitError(parseRetryAfterMs(res.headers.get('retry-after')));
+      }
+      if (!res.ok) throw new NansenHttpError(res.status);
+
+      const payload = await readJsonBounded(res);
+      const rows = extractRows(payload);
+      const netflows: NansenNetflow[] = [];
+      let scanned = 0;
+      for (const row of rows) {
+        if (netflows.length >= maxRows || scanned >= MAX_ROWS_SCANNED) break;
+        scanned += 1;
+        const normalized = normalizeRow(row);
+        if (normalized !== null) netflows.push(normalized);
+      }
+
+      return {
+        source: 'nansen',
+        endpoint: NANSEN_NETFLOWS_PATH,
+        fetchedAtMs: now(),
+        netflows,
+      };
     } catch (err) {
+      if (err instanceof NansenClientError) throw err; // Already typed; keep it.
       if (err instanceof Error && err.name === 'AbortError') {
         throw new NansenTimeoutError(timeoutMs);
       }
@@ -211,30 +270,6 @@ export function createNansenClient(deps: NansenClientDeps): NansenClient {
     } finally {
       clearTimeout(timer);
     }
-
-    if (res.status === 429) {
-      const header = res.headers.get('retry-after');
-      const retryAfterMs =
-        header !== null && Number.isFinite(Number(header)) ? Number(header) * 1_000 : undefined;
-      throw new NansenRateLimitError(retryAfterMs);
-    }
-    if (!res.ok) throw new NansenHttpError(res.status);
-
-    const payload = await readJsonBounded(res);
-    const rows = extractRows(payload);
-    const netflows: NansenNetflow[] = [];
-    for (const row of rows) {
-      if (netflows.length >= maxRows) break;
-      const normalized = normalizeRow(row);
-      if (normalized !== null) netflows.push(normalized);
-    }
-
-    return {
-      source: 'nansen',
-      endpoint: NANSEN_NETFLOWS_PATH,
-      fetchedAtMs: now(),
-      netflows,
-    };
   }
 
   return { fetchSignal };

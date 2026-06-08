@@ -205,3 +205,51 @@ describe('nansen provider — concurrency & resilience', () => {
     expect(JSON.stringify(events)).not.toContain('netflowUsd');
   });
 });
+
+describe('nansen provider — fault isolation (a throwing logger must not crash the arc)', () => {
+  // The logger is caller-supplied (an observability sink). Its contract forbids
+  // logging secrets, not throwing. A buggy/failing sink must never turn the
+  // detached fetch into an unhandled rejection or throw into the synchronous
+  // tick path. These tests pin the fail-open guarantee under a hostile logger.
+  const throwingLogger = (): void => {
+    throw new Error('observability sink is down');
+  };
+
+  test('a throwing logger does not reject the detached fetch; the snapshot still lands', async () => {
+    const c = controllableClient();
+    const p = createNansenSignalProvider({
+      client: c.client,
+      pollEveryNTicks: 1,
+      cacheTtlMs: 1_000,
+      now: () => 0,
+      logger: throwingLogger,
+    });
+
+    // maybeRefresh starts the detached fetch; the `fetch_start` logger throws
+    // synchronously inside it, but that must not surface here.
+    expect(() => p.maybeRefresh(0)).not.toThrow();
+
+    c.resolveNext(signal(2));
+    await flush();
+    // The fetch succeeded and the cache was populated even though every logger
+    // call (start + success) threw — proving the outer guard swallows them.
+    expect(p.current()?.netflows).toHaveLength(2);
+  });
+
+  test('a throwing logger on the synchronous budget path does not throw into the tick', () => {
+    const c = controllableClient();
+    const p = createNansenSignalProvider({
+      client: c.client,
+      pollEveryNTicks: 1,
+      cacheTtlMs: 1_000,
+      now: () => 0,
+      maxCalls: 0, // budget exhausted immediately → `budget_exhausted` logger fires
+      logger: throwingLogger,
+    });
+
+    // `maybeRefresh` runs synchronously in the orchestrator tick loop; a throw
+    // from the budget logger here would propagate straight into the arc.
+    expect(() => p.maybeRefresh(0)).not.toThrow();
+    expect(c.calls()).toBe(0); // no fetch attempted (budget was zero)
+  });
+});

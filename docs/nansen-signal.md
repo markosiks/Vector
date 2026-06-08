@@ -77,7 +77,14 @@ A live snapshot carries a wall-clock `fetchedAtMs` and is therefore
 - Usage/credit observability is emitted via `NansenLogger` events
   (`fetch_start` / `fetch_success` / `fetch_error` / `budget_exhausted`) that
   carry only counts and a static endpoint label — never secrets or response
-  bodies.
+  bodies. The logger is treated as fallible: every emit is wrapped, so a sink
+  that throws can never reject the detached fetch or throw into the tick.
+- Because the key rides in a request header, the endpoint is **`https`-only**
+  (enforced by the config schema) and the client uses `redirect: 'error'` — it
+  refuses to follow a redirect that could replay the credential to another
+  origin. The wall-clock timeout spans the whole round-trip (connect **and**
+  body read), so a slow-drip body cannot hang the fetch; the row scan is capped
+  independently of output, so a hostile all-empty array cannot stall the loop.
 
 ## Wiring (opt-in)
 
