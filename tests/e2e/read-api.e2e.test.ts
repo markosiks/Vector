@@ -38,7 +38,7 @@ class MockPool {
   async query(
     sql: string,
     params?: readonly unknown[],
-  ): Promise<{ rows: PolicyEventRow[]; rowCount: number | null }> {
+  ): Promise<{ rows: (PolicyEventRow & { cursor_t: string })[]; rowCount: number | null }> {
     if (!sql.includes('FROM policy_events')) return { rows: [], rowCount: 0 };
     const sorted = [...feed].sort(descCmp);
     const p = params ?? [];
@@ -58,7 +58,13 @@ class MockPool {
       });
       if (start === -1) start = sorted.length;
     }
-    const rows = sorted.slice(start, start + limit);
+    // The real page query selects the microsecond-precision `cursor_t` alias
+    // (CURSOR_KEY_SQL) that `paginate` mints the next cursor from. Mirror that
+    // contract: derive it from `created_at` (millisecond precision is exact for
+    // this fixture's timestamps, and ties are broken by `id`, matching the seek).
+    const rows = sorted
+      .slice(start, start + limit)
+      .map((r) => ({ ...r, cursor_t: r.created_at.toISOString() }));
     return { rows, rowCount: rows.length };
   }
 }
