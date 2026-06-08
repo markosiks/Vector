@@ -44,6 +44,17 @@ Vector's operator model that sender is the funded operator wallet
 transaction signature** — there is no separate EIP-191/ERC-1271 "FeedbackAuth"
 layer in this contract version (that belonged to an earlier ERC-8004 draft).
 
+**Self-feedback is forbidden by the contract.** `giveFeedback` guards with
+`require(!isAuthorizedOrOwner(msg.sender, agentId), "Self-feedback not
+allowed")`. An agent's owner / operator / approved address therefore **cannot**
+attest about its own agent — the feedback author must be a *different* address
+than the agent owner. Vector consequently needs **two distinct keys**: an
+**owner key** that registers the seed agents in the Identity Registry, and a
+separate **attestor key** that calls `giveFeedback`. (This also matches the
+honest narrative: the arena/referee is a third-party client attesting about an
+agent it does not own — not self-assessment.) Same call also reverts with
+`ERC721NonexistentToken` if `agentId` is not a registered token.
+
 EIP-191/ERC-1271 verification still ships in `lib/chain/auth.ts` for
 authenticating Vector's **off-chain** feedback payload (served at `feedback_uri`,
 integrity-anchored by `feedback_hash`) and to stay forward-compatible. It reuses
