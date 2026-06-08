@@ -74,6 +74,37 @@ describe('seeded config — completeness & types', () => {
   });
 });
 
+describe('seeded config — cross-field invariants', () => {
+  test('crash_cap >= router.s_min is rejected (a floor-crash must stay gated next round)', () => {
+    const candidate = {
+      ...CONFIG,
+      scoring: { ...CONFIG.scoring, crash_cap: CONFIG.router.s_min },
+    };
+    const result = configSchema.safeParse(candidate);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.join('.') === 'scoring.crash_cap')).toBe(true);
+    }
+  });
+
+  test('score_0 >= router.s_min is rejected (trust is earned, never granted)', () => {
+    const candidate = {
+      ...CONFIG,
+      scoring: { ...CONFIG.scoring, score_0: CONFIG.router.s_min + 1 },
+    };
+    const result = configSchema.safeParse(candidate);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.join('.') === 'scoring.score_0')).toBe(true);
+    }
+  });
+
+  test('the seeded config satisfies both invariants', () => {
+    expect(CONFIG.scoring.crash_cap).toBeLessThan(CONFIG.router.s_min);
+    expect(CONFIG.scoring.score_0).toBeLessThan(CONFIG.router.s_min);
+  });
+});
+
 describe('seeded config — runtime immutability', () => {
   test('mutating a top-level constant throws', () => {
     expect(() => {
