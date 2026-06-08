@@ -1,54 +1,76 @@
-import { SEED_AGENTS } from '../agents/seed';
-
 /**
- * Operator-assigned on-chain agent identifiers (P1.7, task 5 provenance note).
+ * On-chain agentId provenance for ERC-8004 feedback (P1.7 task 5, corrected).
  *
- * An ERC-8004 Reputation Registry keys all feedback by `agentId`, a `uint256`
- * that is the **ERC-721 tokenId in the Identity Registry**. The canonical
- * Identity Registry is live on Mantle Sepolia, but minting/registering agents
- * there is ROADMAP and out of P1.7 scope. To remove the ambiguity of "where
- * does the agentId for a P1.8 feedback write come from" without pulling the
- * Identity Registry forward, the operator deterministically assigns each seed
- * agent a stable id from the frozen roster order and stamps it into
- * `agents.agent_id_onchain`.
+ * ## Ground truth (verified against the live Mantle Sepolia contracts)
  *
- * IMPORTANT (documented, not silently assumed): these are operator-namespaced
- * provenance ids. A `giveFeedback` write against the *canonical* registry
- * additionally requires that `agentId` be a registered tokenId in the canonical
- * Identity Registry. Until that registration lands (or Vector deploys its own
- * registry pair), P1.8 must either register these ids or run against a
- * Vector-owned instance. See docs/erc8004-registry.md §"agentId provenance".
+ * An ERC-8004 Reputation Registry keys every feedback entry by `agentId`, which
+ * is the **ERC-721 tokenId minted by the Identity Registry**. The canonical
+ * `giveFeedback(...)` calls `IIdentityRegistry.isAuthorizedOrOwner(msg.sender,
+ * agentId)` and reverts with `ERC721NonexistentToken` when `agentId` was never
+ * registered. There is therefore **no such thing as an operator-invented
+ * agentId**: a write against an unregistered id always reverts.
+ *
+ * An earlier revision of this module handed each seed agent a 1-based id
+ * (`1, 2, 3, …`). On the canonical registry those tokenIds are **already owned
+ * by an unrelated party** (e.g. `ownerOf(1)` → `0x3D75…`), so writing feedback
+ * against them would attest *someone else's* agent. That footgun is removed
+ * here: a seed agent has **no** on-chain id until it is really registered, which
+ * matches the data model (`agents.agent_id_onchain` is "nullable until
+ * registered", §7.1). Registration is performed via {@link registerAgent}
+ * (lib/chain/identity.ts) and the returned tokenId is persisted into
+ * `agents.agent_id_onchain`; this module only *validates* that stored value on
+ * the way back out, so the feedback write path (P1.8) fails closed rather than
+ * inventing or reusing an id.
  */
 
-/** Deterministic on-chain id for a seed agent: its 1-based roster position. */
-function onchainIdForIndex(index: number): string {
-  return String(index + 1);
-}
+/** Inclusive upper bound of a Solidity `uint256` (ERC-721 tokenId domain). */
+const UINT256_MAX = (1n << 256n) - 1n;
 
-/** One operator assignment: the seed agent's stable id → its on-chain agentId. */
-export interface OnchainIdAssignment {
-  /** Stable Intent `agent_id` / `display_name` of the seed agent. */
-  readonly agentId: string;
-  /** Operator-assigned `agent_id_onchain` (decimal `uint256` string). */
-  readonly agentIdOnchain: string;
+/** Thrown when a stored on-chain agentId is missing or malformed. Value-free. */
+export class AgentIdError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentIdError';
+  }
 }
 
 /**
- * The full, deterministic operator assignment for the seed roster, in roster
- * order. This is the single source consumed when seeding `agents.agent_id_onchain`.
+ * Validate a persisted `agents.agent_id_onchain` into a `uint256` tokenId.
+ *
+ * `null`/empty means the agent has not been registered in the Identity Registry
+ * yet — a hard precondition for any feedback write — so this throws rather than
+ * substituting a placeholder. A non-decimal or out-of-range value is likewise a
+ * deterministic {@link AgentIdError}. Existence of the tokenId on-chain is a
+ * separate check ({@link agentExists} in lib/chain/identity.ts); this function
+ * only guarantees the value is a well-formed candidate.
  */
-export function seedOnchainIdAssignments(): readonly OnchainIdAssignment[] {
-  return SEED_AGENTS.map((agent, index) => ({
-    agentId: agent.id,
-    agentIdOnchain: onchainIdForIndex(index),
-  }));
+export function parseOnchainAgentId(value: string | null | undefined): bigint {
+  if (value === null || value === undefined || value.trim().length === 0) {
+    throw new AgentIdError(
+      'agent is not registered on-chain (agent_id_onchain is null); register it in the Identity Registry before writing feedback',
+    );
+  }
+  const trimmed = value.trim();
+  if (!/^[0-9]+$/.test(trimmed)) {
+    throw new AgentIdError('agent_id_onchain must be a decimal uint256 string');
+  }
+  const id = BigInt(trimmed);
+  if (id > UINT256_MAX) {
+    throw new AgentIdError('agent_id_onchain out of uint256 range');
+  }
+  return id;
 }
 
 /**
- * Resolve the operator-assigned on-chain agentId for a seed agent, or `null`
- * for an unknown agent (so callers can reject rather than invent an id).
+ * Best-effort, non-throwing variant: returns the parsed tokenId, or `null` when
+ * the agent has no valid registered id yet. Useful for read/display paths that
+ * must tolerate not-yet-registered agents (the write path uses the strict
+ * {@link parseOnchainAgentId} so it fails closed).
  */
-export function onchainAgentId(agentId: string): string | null {
-  const index = SEED_AGENTS.findIndex((a) => a.id === agentId);
-  return index === -1 ? null : onchainIdForIndex(index);
+export function tryOnchainAgentId(value: string | null | undefined): bigint | null {
+  try {
+    return parseOnchainAgentId(value);
+  } catch {
+    return null;
+  }
 }
