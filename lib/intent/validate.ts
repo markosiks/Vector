@@ -104,20 +104,29 @@ const inUnitInterval = (d: string): boolean => {
 };
 
 /**
- * Per-field fractional scale: the `s` of each `numeric(p, s)` column the
- * persisted `intents` row uses (migration 0001). A value carrying more fraction
- * digits than `s` would be silently *rounded* by Postgres on INSERT, diverging
- * the stored row from the signed/hashed Intent and breaking the "numeric is
- * exact, never through a float" invariant — a value the validator admitted as
- * exact would persist as a different number.
+ * Per-field *storability* bounds derived from each `numeric(p, s)` column of the
+ * persisted `intents` row (migration 0001). Both halves of `numeric(p, s)` are
+ * guarded so a value the gate admits is one Postgres can store *exactly*:
  *
- * Only the *scale* is bounded here, never the integer magnitude: an over-large
- * size or leverage is the firewall's domain — it CLIPs the magnitude down to a
- * safe cap before anything is persisted (architecture.txt §6.5), so rejecting on
- * magnitude here would wrongly hard-reject an input the firewall is designed to
- * clip. Clipping never adds fraction digits, so this scale guard and the
- * firewall do not overlap. (The canonical form's generic 80-digit cap in
- * canonical.ts is an amplification-DoS guard, unrelated to storability.)
+ *  - {@link STORABLE_SCALE} (= `s`): a value with more fraction digits than `s`
+ *    is silently *rounded* on INSERT, diverging the stored row from the
+ *    signed/hashed Intent and breaking the "numeric is exact, never through a
+ *    float" invariant.
+ *  - {@link STORABLE_INT_DIGITS} (= `p − s`): a value whose integer part exceeds
+ *    `p − s` overflows the column and the INSERT throws Postgres `22003
+ *    numeric_value_out_of_range`.
+ *
+ * The magnitude bound is a *storability* guard, NOT the firewall's policy clip.
+ * The firewall CLIPs an in-range size down to a safe trade cap (architecture.txt
+ * §6.5) — but that clip runs in the referee *after* the raw Intent is persisted
+ * (orchestrator persists at the reserve, then runs the referee), so a value too
+ * large to even be stored never reaches the clip: it aborts the persisting
+ * INSERT with an uncaught `22003`. Rejecting it here turns that crash into a
+ * clean, deterministic `*_magnitude` rejection at the gate, exactly as the scale
+ * guard does for fraction digits. The two never overlap: a clip changes
+ * magnitude but never adds fraction digits, and a storable-magnitude value is
+ * still free to be clipped downstream. (The canonical form's generic 80-digit
+ * cap in canonical.ts is an amplification-DoS guard, unrelated to storability.)
  */
 const STORABLE_SCALE = {
   size: 18, // numeric(38, 18)
@@ -126,6 +135,15 @@ const STORABLE_SCALE = {
   leverage: 6, // numeric(12, 6)
   max_slippage: 6, // numeric(12, 6)
 } as const satisfies Record<string, number>;
+
+/** Per-field integer-digit budget (`p − s`) of each persisted `numeric(p, s)` column. */
+const STORABLE_INT_DIGITS = {
+  size: 20, // numeric(38, 18)
+  tp: 20, // numeric(38, 18)
+  sl: 20, // numeric(38, 18)
+  leverage: 6, // numeric(12, 6)
+  max_slippage: 6, // numeric(12, 6)
+} as const satisfies Record<keyof typeof STORABLE_SCALE, number>;
 
 /**
  * Count of fraction digits in a canonical decimal string. Canonical form carries
@@ -137,14 +155,33 @@ const fractionDigits = (d: string): number => {
   return dot === -1 ? 0 : d.length - dot - 1;
 };
 
+/**
+ * Count of integer-part digits in a canonical decimal string. Sign-agnostic; a
+ * bare `"0"` counts as zero (it stores in any column), and canonical form has no
+ * leading integer zeros, so this is the exact integer width Postgres must store.
+ */
+const integerDigits = (d: string): number => {
+  const s = d.startsWith('-') ? d.slice(1) : d;
+  const dot = s.indexOf('.');
+  const intPart = dot === -1 ? s : s.slice(0, dot);
+  return intPart === '0' ? 0 : intPart.length;
+};
+
 /** True iff `value` has finer fractional scale than its column can store exactly. */
 const exceedsScale = (field: keyof typeof STORABLE_SCALE, value: string): boolean =>
   fractionDigits(value) > STORABLE_SCALE[field];
+
+/** True iff `value`'s integer magnitude is too large to store in its column. */
+const exceedsMagnitude = (field: keyof typeof STORABLE_INT_DIGITS, value: string): boolean =>
+  integerDigits(value) > STORABLE_INT_DIGITS[field];
 
 /** Step (e): domain bounds on the normalized numeric fields. */
 function checkBounds(intent: Intent): ValidationFailure | null {
   if (!isPositive(intent.size)) {
     return fail('bounds', 'nonpositive_size', 'size must be greater than zero');
+  }
+  if (exceedsMagnitude('size', intent.size)) {
+    return fail('bounds', 'size_magnitude', 'size is too large to be stored');
   }
   if (exceedsScale('size', intent.size)) {
     return fail('bounds', 'size_scale', 'size has more fraction digits than can be stored exactly');
@@ -153,6 +190,9 @@ function checkBounds(intent: Intent): ValidationFailure | null {
     if (!isPositive(intent.tp)) {
       return fail('bounds', 'nonpositive_tp', 'tp must be greater than zero');
     }
+    if (exceedsMagnitude('tp', intent.tp)) {
+      return fail('bounds', 'tp_magnitude', 'tp is too large to be stored');
+    }
     if (exceedsScale('tp', intent.tp)) {
       return fail('bounds', 'tp_scale', 'tp has more fraction digits than can be stored exactly');
     }
@@ -160,6 +200,9 @@ function checkBounds(intent: Intent): ValidationFailure | null {
   if ('sl' in intent && intent.sl !== undefined) {
     if (!isPositive(intent.sl)) {
       return fail('bounds', 'nonpositive_sl', 'sl must be greater than zero');
+    }
+    if (exceedsMagnitude('sl', intent.sl)) {
+      return fail('bounds', 'sl_magnitude', 'sl is too large to be stored');
     }
     if (exceedsScale('sl', intent.sl)) {
       return fail('bounds', 'sl_scale', 'sl has more fraction digits than can be stored exactly');
@@ -180,6 +223,9 @@ function checkBounds(intent: Intent): ValidationFailure | null {
   if (intent.action === 'open' || intent.action === 'modify') {
     if (!isPositive(intent.leverage)) {
       return fail('bounds', 'nonpositive_leverage', 'leverage must be greater than zero');
+    }
+    if (exceedsMagnitude('leverage', intent.leverage)) {
+      return fail('bounds', 'leverage_magnitude', 'leverage is too large to be stored');
     }
     if (exceedsScale('leverage', intent.leverage)) {
       return fail(
