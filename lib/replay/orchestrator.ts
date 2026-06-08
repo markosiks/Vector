@@ -7,7 +7,7 @@ import { insertOutcome } from '@/lib/db/repos/outcomes';
 import { readKillSwitchState, type KillSwitchState } from '@/lib/db/repos/kill-switch';
 import { listPolicyEventsByAgentRound } from '@/lib/db/repos/policy-events';
 import { listOutcomesByAgentRound } from '@/lib/db/repos/outcomes';
-import type { AgentRow } from '@/lib/db/schema';
+import type { AgentRow, OutcomeRow, PolicyEventRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
 import type { Context, Intent } from '@/lib/intent/types';
 import { signIntent } from '@/lib/intent/sign';
@@ -17,6 +17,7 @@ import type { RouterState } from '@/lib/router/types';
 import { runReferee } from '@/lib/referee/record';
 import type { RefereeState } from '@/lib/referee/types';
 import { deriveScoreInputs, recordScore } from '@/lib/scoring/record';
+import type { ScoreInputs, ScoreResult } from '@/lib/scoring/types';
 import type { DemoArc } from '@/seed';
 
 import { composeIntent } from './compose';
@@ -66,6 +67,29 @@ export interface RunArcHooks {
     readonly roundId: string;
     readonly scoreR: string;
     readonly crashed: boolean;
+  }) => void | Promise<void>;
+  /**
+   * The P1.8 attestation seam, invoked after an agent is scored at a settle and
+   * **inside the settle transaction** — so anything it persists (the optimistic
+   * attestation mirror) is atomic with the score it anchors. It receives the
+   * transaction's `db` plus the round's facts (the score result, the scoring
+   * inputs, and the immutable outcomes/policy events). The on-chain write itself
+   * is *not* done here; the caller queues it for after the commit so chain
+   * latency never blocks the arc. A no-op when unset — the default demo path is
+   * byte-identical.
+   */
+  readonly onAttest?: (event: {
+    readonly db: Queryable;
+    readonly agent: {
+      readonly seedId: string;
+      readonly uuid: string;
+      readonly onchainId: string | null;
+    };
+    readonly roundId: string;
+    readonly result: ScoreResult;
+    readonly inputs: ScoreInputs;
+    readonly outcomes: readonly OutcomeRow[];
+    readonly policyEvents: readonly PolicyEventRow[];
   }) => void | Promise<void>;
   /** Invoked once per processed tick (after settle), for progress/streaming. */
   readonly onTick?: (event: {
@@ -330,6 +354,19 @@ async function settleRound(
         roundId: round.id,
         scoreR: result.score_r,
         crashed: result.crashed,
+      });
+      await hooks?.onAttest?.({
+        db,
+        agent: {
+          seedId: agent.id,
+          uuid,
+          onchainId: setup.agentsBySeedId.get(agent.id)?.agent_id_onchain ?? null,
+        },
+        roundId: round.id,
+        result,
+        inputs,
+        outcomes,
+        policyEvents: events,
       });
     }
 

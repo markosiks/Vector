@@ -26,9 +26,7 @@ mock.module('server-only', () => ({}));
 describeChain('Mantle Sepolia ERC-8004 Reputation Registry (real RPC)', () => {
   test('public client reports chain id 5003', async () => {
     const { getMantlePublicClient } = await import('@/lib/chain/client');
-    expect(await getMantlePublicClient().getChainId()).toBe(
-      CONFIG.chain.mantle_testnet_chain_id,
-    );
+    expect(await getMantlePublicClient().getChainId()).toBe(CONFIG.chain.mantle_testnet_chain_id);
   });
 
   test('smoke-read proves the registry is live and wired to the config Identity Registry', async () => {
@@ -82,9 +80,9 @@ describeChain('Mantle Sepolia ERC-8004 Reputation Registry (real RPC)', () => {
     // The owner is, by definition, authorized over its own agent.
     expect(await reader.isAuthorizedOrOwner(owner as `0x${string}`, 1n)).toBe(true);
     // A random address is not.
-    expect(
-      await reader.isAuthorizedOrOwner('0x1111111111111111111111111111111111111111', 1n),
-    ).toBe(false);
+    expect(await reader.isAuthorizedOrOwner('0x1111111111111111111111111111111111111111', 1n)).toBe(
+      false,
+    );
     // An almost-certainly-unminted id reads back as "does not exist", not a throw.
     expect(await agentExists(reader, (1n << 200n) + 12345n)).toBe(false);
   });
