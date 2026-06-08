@@ -110,7 +110,7 @@ export function listPolicyEventsByAgentRound(
 ): Promise<PolicyEventRow[]> {
   return selectMany(
     db,
-    'SELECT * FROM policy_events WHERE agent_id = $1 AND round_id = $2 ORDER BY created_at ASC',
+    'SELECT * FROM policy_events WHERE agent_id = $1 AND round_id = $2 ORDER BY created_at ASC, id ASC',
     [agentId, roundId],
     policyEventRow,
   );
