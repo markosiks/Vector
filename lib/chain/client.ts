@@ -1,20 +1,30 @@
 import 'server-only';
 
 import {
+  BaseError,
+  ContractFunctionExecutionError,
   createPublicClient,
   createWalletClient,
+  getAddress,
   http,
   type Account,
   type Address,
+  type Hex,
   type PublicClient,
   type WalletClient,
 } from 'viem';
 
 import { CONFIG } from '../config/constants';
 import { ENV } from '../config/env';
-import { reputationRegistryAbi } from './abi';
+import { identityRegistryAbi, reputationRegistryAbi } from './abi';
+import { IdentityError, type IdentityReader, type IdentityWriteClient } from './identity';
 import { mantleSepolia } from './network';
-import { operatorAddress, parseOperatorKey } from './operator.schema';
+import {
+  assertDistinctSignerKeys,
+  operatorAddress,
+  parseAttestorKey,
+  parseOperatorKey,
+} from './operator.schema';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { RegistryReadFn, ReputationReader } from './registry';
 
@@ -40,6 +50,8 @@ const RPC_TIMEOUT_MS = 10_000;
 let publicClient: PublicClient | undefined;
 let walletClient: WalletClient | undefined;
 let operatorAccount: Account | undefined;
+let attestorWalletClient: WalletClient | undefined;
+let attestorAccount: Account | undefined;
 
 /** Resolve the configured RPC URL or fail with a clear, value-free message. */
 function requireRpcUrl(): string {
@@ -110,6 +122,130 @@ export function getMantleWalletClient(): WalletClient {
   return walletClient;
 }
 
+/** The attestor's public address, derived from the validated key. Server-only. */
+export function getAttestorAddress(): Address {
+  return operatorAddress(parseAttestorKey(ENV.ATTESTOR_PRIVATE_KEY));
+}
+
+/** Lazily build the attestor account (used only by feedback writes, P1.8). */
+function getAttestorAccount(): Account {
+  if (attestorAccount === undefined) {
+    attestorAccount = privateKeyToAccount(parseAttestorKey(ENV.ATTESTOR_PRIVATE_KEY));
+  }
+  return attestorAccount;
+}
+
+/**
+ * Assert the attestor and operator keys resolve to different addresses, failing
+ * closed otherwise. The registry rejects feedback authored by an agent's
+ * owner/operator (self-feedback), and the operator key owns every registered
+ * seed agent, so a shared key would make every `giveFeedback` revert. Catching
+ * it here turns a wasted on-chain revert into a clear configuration error.
+ */
+export function assertDistinctSigners(): void {
+  assertDistinctSignerKeys(ENV.OPERATOR_PRIVATE_KEY, ENV.ATTESTOR_PRIVATE_KEY);
+}
+
+/**
+ * Lazily create the attestor wallet client for feedback writes (P1.8). Throws a
+ * value-free error if the attestor key is missing/malformed, so a misconfigured
+ * deployment fails closed rather than sending an unauthorized write.
+ */
+export function getMantleAttestorWalletClient(): WalletClient {
+  if (attestorWalletClient === undefined) {
+    attestorWalletClient = createWalletClient({
+      account: getAttestorAccount(),
+      chain: mantleSepolia,
+      transport: http(requireRpcUrl(), { timeout: RPC_TIMEOUT_MS }),
+    });
+  }
+  return attestorWalletClient;
+}
+
+/** True when an error is a contract-level revert (vs. a transport failure). */
+function isContractRevert(error: unknown): boolean {
+  if (error instanceof ContractFunctionExecutionError) {
+    return true;
+  }
+  if (error instanceof BaseError) {
+    return error.walk((e) => e instanceof ContractFunctionExecutionError) !== null;
+  }
+  return false;
+}
+
+/**
+ * An {@link IdentityReader} bound to the configured Identity Registry. Maps a
+ * "token does not exist" contract revert to `null`/`false` (the deterministic
+ * existence semantics the identity helpers expect) while letting transport
+ * errors propagate as a typed {@link IdentityError}, so a flaky RPC is never
+ * mistaken for an unregistered agent.
+ */
+export function getIdentityReader(): IdentityReader {
+  const client = getMantlePublicClient();
+  const address = CONFIG.chain.identity_registry_address as Address;
+  return {
+    ownerOf: async (agentId) => {
+      try {
+        const owner = (await client.readContract({
+          address,
+          abi: identityRegistryAbi,
+          functionName: 'ownerOf',
+          args: [agentId],
+        })) as string;
+        return getAddress(owner);
+      } catch (error) {
+        if (isContractRevert(error)) {
+          return null;
+        }
+        throw new IdentityError('identity ownerOf read failed');
+      }
+    },
+    isAuthorizedOrOwner: async (spender, agentId) => {
+      try {
+        return (await client.readContract({
+          address,
+          abi: identityRegistryAbi,
+          functionName: 'isAuthorizedOrOwner',
+          args: [spender, agentId],
+        })) as boolean;
+      } catch (error) {
+        if (isContractRevert(error)) {
+          return false;
+        }
+        throw new IdentityError('identity isAuthorizedOrOwner read failed');
+      }
+    },
+  };
+}
+
+/**
+ * An {@link IdentityWriteClient} backed by the **operator (owner)** wallet —
+ * `register` makes `msg.sender` the agent owner, so registration must use the
+ * operator key, never the attestor key. Returns raw tx hash / receipt; decoding
+ * the minted tokenId from the `Registered` event happens in `identity.ts`.
+ */
+export function getIdentityWriteClient(): IdentityWriteClient {
+  const wallet = getMantleWalletClient();
+  const publicReader = getMantlePublicClient();
+  const address = CONFIG.chain.identity_registry_address as Address;
+  const account = getOperatorAccount();
+  return {
+    writeRegister: (agentURI: string): Promise<Hex> =>
+      wallet.writeContract({
+        address,
+        abi: identityRegistryAbi,
+        functionName: 'register',
+        args: [agentURI],
+        account,
+        chain: mantleSepolia,
+      }),
+    waitForReceipt: async (hash: Hex) => {
+      const receipt = await publicReader.waitForTransactionReceipt({ hash });
+      return { status: receipt.status, logs: receipt.logs };
+    },
+  };
+}
+
 /**
  * Drop the cached clients so the next getter rebuilds them. Test-only: the
  * singletons would otherwise leak a primed/mocked transport into later tests in
@@ -119,4 +255,6 @@ export function resetChainClients(): void {
   publicClient = undefined;
   walletClient = undefined;
   operatorAccount = undefined;
+  attestorWalletClient = undefined;
+  attestorAccount = undefined;
 }
