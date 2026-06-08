@@ -41,6 +41,11 @@ bun run test                 # unit + fuzz + e2e (integration auto-skips w/o DB)
 bun run test:integration     # needs DATABASE_URL; run in its own process
 ```
 
+> ⚠️ `bun run build` requires a valid `DATABASE_URL`. The API route modules
+> read `ENV` at import, which is validated eagerly when Next collects page data
+> at build time, so a build without the variable fails fast. This is expected
+> for the Vercel deploy (where `DATABASE_URL` is set); set it locally to build.
+
 ## Docs
 
 - [docs/config.md](./docs/config.md) — every constant, default and §ARCH ref.
