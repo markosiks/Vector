@@ -5,6 +5,9 @@
 # =============================================================================
 
 # ----- Dependencies ----------------------------------------------------------
+# Match both a node_modules directory and a stray node_modules symlink/file
+# (a trailing-slash pattern ignores only directories).
+node_modules
 node_modules/
 .pnp
 .pnp.*
