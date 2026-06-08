@@ -9,7 +9,12 @@
  * deterministic 90-second arc never depends on it. See `docs/byreal-rail.md`.
  */
 
-export { createByrealRail, ByrealRailError, type ByrealRailDeps, type ByrealCliRunner } from './adapter';
+export {
+  createByrealRail,
+  ByrealRailError,
+  type ByrealRailDeps,
+  type ByrealCliRunner,
+} from './adapter';
 export { loadByrealCredentials, type ByrealCredentials } from './credentials';
 export { BYREAL_MARKETS, resolveByrealMarket, type ByrealMarket } from './markets';
 export {
@@ -37,7 +42,4 @@ export {
   type ByrealCliResult,
   type RunByrealCliOptions,
 } from './cli';
-export {
-  createMemoryIdempotencyStore,
-  type IdempotencyStore,
-} from './idempotency';
+export { createMemoryIdempotencyStore, type IdempotencyStore } from './idempotency';

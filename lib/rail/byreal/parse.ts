@@ -142,11 +142,7 @@ export function parseOrderResult(data: unknown): OrderFill {
   // No fill and nothing resting (an acknowledged order that neither filled nor
   // rests on the book) is reported as 'sent', not 'filled' — claiming a fill of
   // size 0 misrepresents the execution on the credibility surface.
-  const status: ExecutionStatus = hasFill
-    ? hasResting
-      ? 'partial'
-      : 'filled'
-    : 'sent';
+  const status: ExecutionStatus = hasFill ? (hasResting ? 'partial' : 'filled') : 'sent';
 
   return {
     orderId,

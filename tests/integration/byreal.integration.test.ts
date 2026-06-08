@@ -29,8 +29,15 @@ function fillingRunner(): ByrealCliRunner {
     const isPosition = subArgv[0] === 'position' && subArgv[1] === 'list';
     const data = isPosition
       ? [{ coin: 'BTC', positionValue: '650', unrealizedPnl: '12', szi: '0.01' }]
-      : { filled: { oid: Math.floor(Math.random() * 1e9), totalSz: '0.01', avgPx: '65000' }, fee: '0.5' };
-    return { stdout: JSON.stringify({ success: true, data }), stderr: '', code: 0 } as ByrealCliResult;
+      : {
+          filled: { oid: Math.floor(Math.random() * 1e9), totalSz: '0.01', avgPx: '65000' },
+          fee: '0.5',
+        };
+    return {
+      stdout: JSON.stringify({ success: true, data }),
+      stderr: '',
+      code: 0,
+    } as ByrealCliResult;
   };
 }
 
@@ -115,9 +122,9 @@ describeDb('byreal credibility rail honors the determinism boundary', () => {
       ),
     ).toBeGreaterThan(0);
     // …and the seed settlement is still present and unchanged.
-    expect(await live.count("SELECT count(*) n FROM executions WHERE rail = 'seed'")).toBeGreaterThan(
-      0,
-    );
+    expect(
+      await live.count("SELECT count(*) n FROM executions WHERE rail = 'seed'"),
+    ).toBeGreaterThan(0);
     // The scores are identical — byreal outcomes never fed the deterministic score.
     expect(await live.scores()).toEqual(baseScores);
   });
@@ -139,9 +146,9 @@ describeDb('byreal credibility rail honors the determinism boundary', () => {
     await runArc(live.db, arc, { credibilityRail });
 
     expect(await live.count("SELECT count(*) n FROM executions WHERE rail = 'byreal'")).toBe(0);
-    expect(await live.count("SELECT count(*) n FROM executions WHERE rail = 'seed'")).toBeGreaterThan(
-      0,
-    );
+    expect(
+      await live.count("SELECT count(*) n FROM executions WHERE rail = 'seed'"),
+    ).toBeGreaterThan(0);
     expect(await live.scores()).toEqual(baseScores);
   });
 });

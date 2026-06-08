@@ -3,10 +3,7 @@ import type { Rail, RailFill, RailRequest } from '@/lib/replay/rail';
 import { buildPositionListCommand, buildSettlementCommand } from './command';
 import type { ByrealCredentials } from './credentials';
 import { parseEnvelope } from './envelope';
-import {
-  createMemoryIdempotencyStore,
-  type IdempotencyStore,
-} from './idempotency';
+import { createMemoryIdempotencyStore, type IdempotencyStore } from './idempotency';
 import { buildOutcome, findPosition, parseOrderResult } from './parse';
 import { runByrealCli, type ByrealCliResult } from './cli';
 
