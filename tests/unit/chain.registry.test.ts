@@ -158,4 +158,36 @@ describe('output shape validation', () => {
     const r = reader({ reads: { readFeedback: 'nope' } });
     await expect(readFeedback(r, 1, ID, 0)).rejects.toBeInstanceOf(RegistryError);
   });
+
+  // Fail-closed on untrusted element types: a non-conforming reader return must
+  // surface as a typed RegistryError, never a bare TypeError or a silent coercion.
+  test('getAgentSummary rejects a non-numeric value element', async () => {
+    const r = reader({ reads: { getSummary: [3n, {}, 2] } });
+    await expect(getAgentSummary(r, 1, [ID])).rejects.toBeInstanceOf(RegistryError);
+  });
+
+  test('getAgentSummary rejects an out-of-range decimals element', async () => {
+    const r = reader({ reads: { getSummary: [3n, 0n, 999] } });
+    await expect(getAgentSummary(r, 1, [ID])).rejects.toBeInstanceOf(RegistryError);
+  });
+
+  test('getAgentSummary rejects a non-numeric count element', async () => {
+    const r = reader({ reads: { getSummary: [null, 0n, 0] } });
+    await expect(getAgentSummary(r, 1, [ID])).rejects.toBeInstanceOf(RegistryError);
+  });
+
+  test('readFeedback rejects a non-numeric value element', async () => {
+    const r = reader({ reads: { readFeedback: [{}, 0, '', '', false] } });
+    await expect(readFeedback(r, 1, ID, 0)).rejects.toBeInstanceOf(RegistryError);
+  });
+
+  test('readFeedback rejects a non-string tag element', async () => {
+    const r = reader({ reads: { readFeedback: [100n, 0, 7, '', false] } });
+    await expect(readFeedback(r, 1, ID, 0)).rejects.toBeInstanceOf(RegistryError);
+  });
+
+  test('readFeedback rejects a non-boolean revocation flag', async () => {
+    const r = reader({ reads: { readFeedback: [100n, 0, '', '', 'no'] } });
+    await expect(readFeedback(r, 1, ID, 0)).rejects.toBeInstanceOf(RegistryError);
+  });
 });

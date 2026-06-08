@@ -68,6 +68,42 @@ function toUint(label: string, value: bigint | number | string, max: bigint): bi
   return n;
 }
 
+/**
+ * Coerce an untrusted registry numeric return into a bigint, failing closed.
+ *
+ * Decoded RPC tuple elements are typed by the ABI in production, but this
+ * wrapper treats every reader return as untrusted (the reader is injected). A
+ * non-numeric element must surface as a typed {@link RegistryError}, never a
+ * bare `TypeError` escaping `BigInt(...)`.
+ */
+function toBigIntField(label: string, value: unknown): bigint {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'string') {
+    try {
+      return BigInt(value);
+    } catch {
+      throw new RegistryError(`${label} must be an integer`);
+    }
+  }
+  throw new RegistryError(`${label} must be an integer`);
+}
+
+/** Coerce an untrusted registry return into a bounded unsigned integer, failing closed. */
+function toUintField(label: string, value: unknown, max: bigint): bigint {
+  const n = toBigIntField(label, value);
+  if (n < 0n || n > max) {
+    throw new RegistryError(`${label} out of range`);
+  }
+  return n;
+}
+
+/** Coerce an untrusted decimals return into a uint8-bounded number, failing closed. */
+function toDecimals(label: string, value: unknown): number {
+  return Number(toUintField(label, value, 255n));
+}
+
 /** Validate + checksum an address argument; rejects malformed input cleanly. */
 function toAddress(label: string, value: string): Address {
   try {
@@ -195,11 +231,11 @@ export async function getAgentSummary(
   if (!Array.isArray(result) || result.length < 3) {
     throw new RegistryError('getSummary returned an unexpected shape');
   }
-  const [count, value, decimals] = result as [bigint, bigint, number];
+  const [count, value, decimals] = result;
   return {
-    count: toUint('summary.count', count, UINT64_MAX),
-    value: BigInt(value),
-    valueDecimals: Number(decimals),
+    count: toUintField('summary.count', count, UINT64_MAX),
+    value: toBigIntField('summary.value', value),
+    valueDecimals: toDecimals('summary.valueDecimals', decimals),
   };
 }
 
@@ -217,18 +253,18 @@ export async function readFeedback(
   if (!Array.isArray(result) || result.length < 5) {
     throw new RegistryError('readFeedback returned an unexpected shape');
   }
-  const [value, valueDecimals, tag1, tag2, isRevoked] = result as [
-    bigint,
-    number,
-    string,
-    string,
-    boolean,
-  ];
+  const [value, valueDecimals, tag1, tag2, isRevoked] = result;
+  if (typeof tag1 !== 'string' || typeof tag2 !== 'string') {
+    throw new RegistryError('readFeedback returned non-string tags');
+  }
+  if (typeof isRevoked !== 'boolean') {
+    throw new RegistryError('readFeedback returned a non-boolean revocation flag');
+  }
   return {
-    value: BigInt(value),
-    valueDecimals: Number(valueDecimals),
-    tag1: String(tag1),
-    tag2: String(tag2),
-    isRevoked: Boolean(isRevoked),
+    value: toBigIntField('feedback.value', value),
+    valueDecimals: toDecimals('feedback.valueDecimals', valueDecimals),
+    tag1,
+    tag2,
+    isRevoked,
   };
 }
