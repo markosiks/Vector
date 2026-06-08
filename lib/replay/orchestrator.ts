@@ -4,6 +4,7 @@ import { listAgentsByScore } from '@/lib/db/repos/agents';
 import { insertExecution } from '@/lib/db/repos/executions';
 import { insertIntentReserving, type NewIntent } from '@/lib/db/repos/intents';
 import { insertOutcome } from '@/lib/db/repos/outcomes';
+import { readKillSwitchState, type KillSwitchState } from '@/lib/db/repos/kill-switch';
 import { listPolicyEventsByAgentRound } from '@/lib/db/repos/policy-events';
 import { listOutcomesByAgentRound } from '@/lib/db/repos/outcomes';
 import type { AgentRow } from '@/lib/db/schema';
@@ -39,7 +40,11 @@ import { ensureRound, setupArc, type ArcSetup } from './setup';
  * and validated against `tickInstant(tick)`, never `Date.now()`, so the same
  * `(arc, config)` produces a byte-identical sequence of signed Intents,
  * decisions, and persisted rows. Pacing (sleeping between ticks for the live
- * demo) is the caller's concern and never feeds back into this logic.
+ * demo) is the caller's concern and never feeds back into this logic. The one
+ * deliberate external input is the operator kill switch, read once per round: an
+ * active switch HALTs every Intent regardless of `(arc, config)`. That override
+ * is the whole point of an emergency stop; with the switch inactive (the seeded
+ * default) the sequence stays byte-identical.
  *
  * ## Concurrency
  * Each round's settle (score all agents + route the next round) is one logical
@@ -162,6 +167,12 @@ interface RoundContext {
   readonly allocations: ReadonlyMap<string, string>;
   /** `agents.id` → current agent row (for the denormalized score). */
   readonly agents: ReadonlyMap<string, AgentRow>;
+  /**
+   * Operator kill switch, read once per round and held stable across its ticks.
+   * While active, the referee HALTs every Intent. Read fails open (see
+   * {@link readKillSwitchState}).
+   */
+  readonly killSwitch: KillSwitchState;
 }
 
 /** Load (and create if needed) the context for `roundIndex`. */
@@ -175,7 +186,8 @@ async function loadRoundContext(
   const allocations = new Map(prev.map((p) => [p.agentId, p.amount]));
   const agentRows = await listAgentsByScore(db);
   const agents = new Map(agentRows.map((a) => [a.id, a]));
-  return { index: roundIndex, id: round.id, allocations, agents };
+  const killSwitch = await readKillSwitchState(db);
+  return { index: roundIndex, id: round.id, allocations, agents, killSwitch };
 }
 
 /** Process one agent at one tick: compose → sign → validate → referee → settle. */
@@ -237,7 +249,7 @@ async function processAgentTick(
   if (intentRow === null) return; // Nonce already used (replay): skip silently.
 
   const state: RefereeState = {
-    killSwitch: { active: false },
+    killSwitch: round.killSwitch,
     agent: { allocation, remaining_budget: allocation, drawdown: '0' },
   };
   const decision = await runReferee({
