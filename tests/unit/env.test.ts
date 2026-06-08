@@ -69,6 +69,17 @@ describe('parseEnv — optional values validated when present', () => {
     ).not.toThrow();
   });
 
+  test('accepts an http(s) PUBLIC_BASE_URL', () => {
+    const env = parseEnv({ DATABASE_URL: VALID_DB, PUBLIC_BASE_URL: '  https://vector.app  ' });
+    expect(env.PUBLIC_BASE_URL).toBe('https://vector.app');
+  });
+
+  test('rejects a ws(s) PUBLIC_BASE_URL (the feedbackURI must be HTTP-fetchable)', () => {
+    expect(() => parseEnv({ DATABASE_URL: VALID_DB, PUBLIC_BASE_URL: 'wss://vector.app' })).toThrow(
+      EnvValidationError,
+    );
+  });
+
   test('rejects an empty optional secret when the key is present', () => {
     expect(() => parseEnv({ DATABASE_URL: VALID_DB, NANSEN_API_KEY: '   ' })).toThrow(
       EnvValidationError,
