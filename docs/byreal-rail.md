@@ -34,7 +34,9 @@ This is enforced structurally, not by convention:
 - **Default-off:** with no credentials the rail is disabled, no `byreal` rows are
   written, and the arc is **byte-identical** to the seed-only run
   (`tests/unit/replay.arc.golden.test.ts` stays green; the integration test
-  asserts identical scores with and without the rail enabled).
+  asserts identical scores with and without the rail enabled — verified against a
+  real Neon Postgres: enabling the rail writes the `byreal` rows yet leaves the
+  `scores` rows byte-identical to a seed-only run).
 
 ## VERIFY V3 — resolved
 
