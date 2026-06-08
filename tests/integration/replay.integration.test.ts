@@ -4,6 +4,7 @@ import { Pool, type PoolClient } from '@neondatabase/serverless';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadMigrations, migrate, MIGRATIONS_DIR } from '@/lib/db/migrate';
+import { setKillSwitch } from '@/lib/db/repos/kill-switch';
 import type { Queryable } from '@/lib/db/types';
 import { runArc } from '@/lib/replay';
 import { buildDemoArc } from '@/seed';
@@ -99,5 +100,63 @@ describeDb('demo spine end-to-end (isolated schema on real Neon)', () => {
       agentsBefore,
     );
     expect(await count('SELECT count(*) n FROM scores')).toBe(scoresBefore);
+  });
+});
+
+/**
+ * Integration: the operator kill switch is wired into the live pipeline (M3). An
+ * active switch must make the referee HALT every tick, so the arc reserves intents
+ * and records the HALT audit trail but settles nothing. This is the regression
+ * guard for the orchestrator consuming `round.killSwitch`: reverting that line to a
+ * hard-coded `{ active: false }` (the original dead-switch bug) makes this fail.
+ * Isolated in its own throwaway schema so it cannot perturb the end-state test
+ * above. Skipped unless `DATABASE_URL` is set.
+ */
+describeDb('operator kill switch halts the live pipeline (isolated schema on real Neon)', () => {
+  const schema = `vec_test_${randomUUID().replace(/-/g, '')}`;
+  let pool: Pool;
+  let client: PoolClient;
+  let db: Queryable;
+
+  beforeAll(async () => {
+    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    client = await pool.connect();
+    db = client as unknown as Queryable;
+    await client.query(`CREATE SCHEMA ${schema}`);
+    await client.query(`SET search_path TO ${schema}, public`);
+    await migrate(pool, loadMigrations(MIGRATIONS_DIR), { direction: 'up', searchPath: schema });
+  });
+
+  afterAll(async () => {
+    try {
+      await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  });
+
+  async function count(sql: string): Promise<number> {
+    const { rows } = await client.query(sql);
+    return Number((rows[0] as { n: string }).n);
+  }
+
+  test('an active kill switch HALTs every tick: intents reserved, nothing settled', async () => {
+    await setKillSwitch(db, { active: true, reason: 'incident-42', set_by: 'operator' });
+
+    const arc = buildDemoArc({ rounds: 1 }); // a short arc is enough — every tick HALTs.
+    await runArc(db, arc);
+
+    // The pipeline still reached the referee (intents were reserved before the gate)…
+    expect(await count('SELECT count(*) n FROM intents')).toBeGreaterThan(0);
+    // …but rule #1 HALTed each one, so nothing executed or settled.
+    expect(await count('SELECT count(*) n FROM executions')).toBe(0);
+    expect(await count('SELECT count(*) n FROM outcomes')).toBe(0);
+    // The HALTs are recorded as kill_switch policy events (the audit trail).
+    expect(
+      await count(
+        "SELECT count(*) n FROM policy_events WHERE rule_fired = 'kill_switch' AND decision = 'HALT'",
+      ),
+    ).toBeGreaterThan(0);
   });
 });
