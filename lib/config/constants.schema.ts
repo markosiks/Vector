@@ -1,3 +1,4 @@
+import { isAddress } from 'viem';
 import { z } from 'zod';
 
 /**
@@ -28,6 +29,17 @@ const positiveInt = z.number().int().positive();
 
 /** An `http(s)` URL string. */
 const httpUrl = z.string().url().startsWith('http');
+
+/**
+ * A checksummed EVM address (`0x` + 40 hex). Validated with viem's `isAddress`
+ * in strict mode so a mistyped or wrong-checksum literal fails at module load
+ * rather than silently pointing the app at the wrong contract.
+ */
+const evmAddress = z
+  .string()
+  .refine((value) => isAddress(value, { strict: true }), {
+    message: 'must be a checksummed 0x-prefixed 20-byte EVM address',
+  });
 
 /**
  * Scoring constants — §6.1. Penalties are intentionally asymmetric so a single
@@ -149,6 +161,19 @@ export const chainSchema = z.object({
   mantle_testnet_chain_id: positiveInt,
   /** Base URL of the Mantle testnet explorer (used for tx/address links). */
   mantle_explorer_base_url: httpUrl,
+  /**
+   * Canonical ERC-8004 Reputation Registry on Mantle testnet — the on-chain
+   * anchor for per-round attestations (P1.7, §9.4/§15). Address only; the
+   * operator key and RPC URL are secrets and live in env, never here.
+   */
+  reputation_registry_address: evmAddress,
+  /**
+   * Canonical ERC-8004 Identity Registry on Mantle testnet. A Reputation
+   * Registry feedback `agentId` is this registry's ERC-721 tokenId, so the
+   * address is recorded for provenance and cross-checks even though Identity
+   * writes are ROADMAP.
+   */
+  identity_registry_address: evmAddress,
 });
 
 /** The full seeded-config schema. */

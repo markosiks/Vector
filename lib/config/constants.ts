@@ -83,11 +83,17 @@ const RAW_CONFIG = {
     pool_size: 1_000_000,
     capital_unit_label: 'tMNT',
   },
-  // ── Mantle chain references (P2.3) ──────────────────────────────────────
+  // ── Mantle chain references (P2.3 / P1.7) ───────────────────────────────
   chain: {
     // Mantle Sepolia testnet.
     mantle_testnet_chain_id: 5003,
     mantle_explorer_base_url: 'https://explorer.sepolia.mantle.xyz',
+    // Canonical ERC-8004 singletons on Mantle Sepolia (VERIFY V2, P1.7).
+    // Source: github.com/erc-8004/erc-8004-contracts (master) + on-chain
+    // confirmation (getIdentityRegistry() cross-check). See
+    // docs/erc8004-registry.md. These are not secrets.
+    reputation_registry_address: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
+    identity_registry_address: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
   },
 };
 
