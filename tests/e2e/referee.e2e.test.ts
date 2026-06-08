@@ -194,8 +194,10 @@ describe('e2e — extreme magnitudes', () => {
         .decision,
     ).toBe('ALLOW');
 
+    // Large but *storable* (20 integer digits = numeric(38,18) max) and over the
+    // 10_000 trade cap ⇒ the firewall CLIPs it down to the cap.
     const huge = await signIntent(
-      validOpenInput({ size: '99999999999999999999999999', leverage: 3, nonce: '2', ttl }),
+      validOpenInput({ size: '99999999999999999999', leverage: 3, nonce: '2', ttl }),
       TEST_PK,
     );
     const r = await runReferee({
@@ -206,5 +208,24 @@ describe('e2e — extreme magnitudes', () => {
       validate,
     });
     expect(r).toMatchObject({ decision: 'CLIP', rule_fired: 'size_cap' });
+
+    // Astronomically large enough to be *unstorable* (>20 integer digits) ⇒ the
+    // gate rejects it at the storability bound before it can reach the clip, so
+    // the persisting INSERT never sees a value that would overflow numeric(38,18).
+    const unstorable = await signIntent(
+      validOpenInput({ size: '99999999999999999999999999', leverage: 3, nonce: '3', ttl }),
+      TEST_PK,
+    );
+    expect(
+      (
+        await runReferee({
+          db: sink,
+          input: unstorable,
+          ids: IDS,
+          state: cleanState({ agent: { allocation: '1e30', remaining_budget: '1e30', drawdown: '0' } }),
+          validate,
+        })
+      ).decision,
+    ).toBe('REJECT');
   });
 });
