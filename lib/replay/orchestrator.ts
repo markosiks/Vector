@@ -402,9 +402,15 @@ async function settleCredibility(
       position_delta: fill.outcome.position_delta,
       drawdown: fill.outcome.drawdown,
     });
-  } catch {
-    // Live-rail outage/timeout/parse miss ⇒ silent degradation; the seed
-    // settlement already stands and the score is unaffected.
+  } catch (err) {
+    // The credibility rail is best-effort: a live-rail outage/timeout/parse miss
+    // — or a failed DB write of the byreal row — must NOT stall the deterministic
+    // arc. The seed settlement already stands and the score is unaffected, so we
+    // degrade silently. We still emit an operator signal (name only, never the
+    // intent payload or credentials) so a persistently failing rail or a DB write
+    // fault is observable rather than vanishing without trace.
+    const name = err instanceof Error ? err.name : 'unknown';
+    console.error(`[byreal] credibility settle failed (seed settlement stands): ${name}`);
   }
 }
 

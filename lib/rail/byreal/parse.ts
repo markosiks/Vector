@@ -23,18 +23,50 @@ import { ByrealParseError } from './envelope';
  * column contract); they are never bound through a float.
  */
 
+/** Canonicalize negative zero (`-0`, `-0.0`) to its unsigned form. */
+function canonicalizeZero(value: string): string {
+  return /^-0(?:\.0+)?$/.test(value) ? value.slice(1) : value;
+}
+
+/**
+ * Render a finite JS number as a canonical fixed-point decimal string, never the
+ * exponent form `String()` produces for very small/large magnitudes (e.g. a fee
+ * of `5e-8` must persist as `0.00000005`, not `5e-8`, to honour the `numeric`
+ * column's canonical-decimal contract). Capped at the column's 18-digit scale.
+ */
+function numberToDecimal(value: number): string {
+  if (Number.isInteger(value)) return value.toString();
+  return value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 18 });
+}
+
 /** Coerce a CLI numeric (string or finite number) to a canonical decimal string. */
 function toDecimal(value: unknown): string | undefined {
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    return /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(trimmed) ? trimmed : undefined;
+    if (!/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(trimmed)) return undefined;
+    return canonicalizeZero(trimmed);
   }
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return canonicalizeZero(numberToDecimal(value));
+  }
   return undefined;
 }
 
 /** Lenient numeric: a parseable decimal, else `'0'` (credibility figures). */
 const decOr0 = (value: unknown): string => toDecimal(value) ?? '0';
+
+/**
+ * A non-negative fee figure. The `outcomes.fees` column is `CHECK (fees >= 0)`,
+ * so a venue rebate (a negative fee, e.g. a maker credit) would otherwise abort
+ * the insert and silently drop a real fill. A rebate is not a cost, so it is
+ * recorded as `'0'` rather than as its absolute value (which would misrepresent
+ * it as a charge). PnL still captures the economics; this is a credibility-only
+ * figure that never feeds scoring.
+ */
+const feeDec = (value: unknown): string => {
+  const d = decOr0(value);
+  return d.startsWith('-') ? '0' : d;
+};
 
 /** Absolute value of a decimal string, preserving the canonical form. */
 function absDecimal(value: string): string {
@@ -107,20 +139,21 @@ export function parseOrderResult(data: unknown): OrderFill {
   const filledSize = r.filled === undefined ? '0' : absDecimal(decOr0(r.filled.totalSz));
   const hasFill = filledSize !== '0';
   const hasResting = r.resting !== undefined;
+  // No fill and nothing resting (an acknowledged order that neither filled nor
+  // rests on the book) is reported as 'sent', not 'filled' — claiming a fill of
+  // size 0 misrepresents the execution on the credibility surface.
   const status: ExecutionStatus = hasFill
     ? hasResting
       ? 'partial'
       : 'filled'
-    : hasResting
-      ? 'sent'
-      : 'filled';
+    : 'sent';
 
   return {
     orderId,
     status,
     filledSize,
     realizedPnl: decOr0(r.closedPnl ?? r.realizedPnl),
-    fees: decOr0(r.fee ?? r.fees),
+    fees: feeDec(r.fee ?? r.fees),
   };
 }
 

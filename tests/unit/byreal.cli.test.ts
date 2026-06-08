@@ -39,14 +39,17 @@ function stub(name: string, body: string): string {
 }
 
 describe('buildChildEnv — credential isolation', () => {
-  test('passes only PATH/HOME + the scoped key & wallet, not other parent secrets', () => {
+  test('passes only PATH/HOME + the scoped key, wallet & network, not other parent secrets', () => {
     process.env.BYREAL_TEST_OTHER_SECRET = 'must-not-leak';
     try {
       const env = buildChildEnv(CREDS);
       expect(env.BYREAL_PERPS_AGENT_KEY).toBe('scoped-key-123');
       expect(env.BYREAL_PERPS_WALLET_ADDRESS).toBe(`0x${'a'.repeat(40)}`);
+      // Network is pinned to the validated value (defense-in-depth).
+      expect(env.BYREAL_PERPS_NETWORK).toBe('testnet');
       expect(Object.keys(env).sort()).toEqual([
         'BYREAL_PERPS_AGENT_KEY',
+        'BYREAL_PERPS_NETWORK',
         'BYREAL_PERPS_WALLET_ADDRESS',
         'HOME',
         'PATH',
