@@ -34,10 +34,16 @@ export interface Page<T> {
  *
  * `next_cursor` is non-null only when the page is *full* (`rows.length === limit`),
  * which is the sole signal that more rows may exist — a short page is terminal.
- * The cursor pins the last row's `(created_at, id)`, the same keyset the query
+ * The cursor pins the last row's `(cursor_t, id)`, the same keyset the query
  * orders by, so the next page continues without gap or overlap.
+ *
+ * The timestamp comes from the row's `cursor_t` — the microsecond-precise string
+ * the page query selects (see `CURSOR_KEY_SQL`) — never from `created_at`: the
+ * Neon driver truncates `timestamptz` to milliseconds when it builds the JS
+ * `Date`, so a cursor minted from `created_at.toISOString()` would skip rows in
+ * the same millisecond but with finer microseconds on the next page.
  */
-export function paginate<TRow extends { created_at: Date; id: string }, TDto>(
+export function paginate<TRow extends { cursor_t: string; id: string }, TDto>(
   rows: readonly TRow[],
   toDto: (row: TRow) => TDto,
   limit: number,
@@ -46,7 +52,7 @@ export function paginate<TRow extends { created_at: Date; id: string }, TDto>(
   const last = rows[rows.length - 1];
   const next_cursor =
     rows.length === limit && last !== undefined
-      ? encodeCursor({ t: last.created_at.toISOString(), id: last.id })
+      ? encodeCursor({ t: last.cursor_t, id: last.id })
       : null;
   return { data, next_cursor };
 }

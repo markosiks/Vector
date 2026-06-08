@@ -133,18 +133,23 @@ describe('GET /api/leaderboard', () => {
 });
 
 describe('GET /api/policy-events', () => {
-  test('full page → next_cursor pins the last row', async () => {
-    respond = () => [{ ...policyEventRowFixture }];
+  test('full page → next_cursor pins the last row at microsecond precision', async () => {
+    // The page query selects a microsecond-precise `cursor_t` (CURSOR_KEY_SQL);
+    // the cursor must carry it verbatim, not a millisecond-truncated `created_at`.
+    const cursorT = '2026-06-08T07:00:00.123456Z';
+    respond = () => [{ ...policyEventRowFixture, cursor_t: cursorT }];
     // limit=1 and one row returned ⇒ page is "full" ⇒ a cursor is offered.
     const res = await policyEventsGET(req('http://x/api/policy-events?limit=1'));
     const body = (await res.json()) as { data: unknown[]; next_cursor: string | null };
     expect(body.data).toHaveLength(1);
     expect(body.next_cursor).not.toBeNull();
-    expect(decodeCursor(body.next_cursor as string).id).toBe(policyEventRowFixture.id);
+    const cursor = decodeCursor(body.next_cursor as string);
+    expect(cursor.id).toBe(policyEventRowFixture.id);
+    expect(cursor.t).toBe(cursorT);
   });
 
   test('short page → next_cursor is null (terminal)', async () => {
-    respond = () => [{ ...policyEventRowFixture }];
+    respond = () => [{ ...policyEventRowFixture, cursor_t: '2026-06-08T07:00:00.000000Z' }];
     const res = await policyEventsGET(req('http://x/api/policy-events?limit=50'));
     const body = (await res.json()) as { next_cursor: string | null };
     expect(body.next_cursor).toBeNull();
@@ -162,7 +167,7 @@ describe('GET /api/attestations', () => {
     let seenParams: readonly unknown[] | undefined;
     respond = (_sql, params) => {
       seenParams = params;
-      return [{ ...attestationRowFixture }];
+      return [{ ...attestationRowFixture, cursor_t: '2026-06-08T07:00:00.123456Z' }];
     };
     const res = await attestationsGET(req('http://x/api/attestations?chain_state=confirmed'));
     expect(res.status).toBe(200);
