@@ -34,6 +34,10 @@ export function GET(
       status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
+        // The body is served as the *exact* stored bytes for hash verification,
+        // so pin the declared type: never let a browser MIME-sniff the payload
+        // into another (e.g. executable) content type.
+        'X-Content-Type-Options': 'nosniff',
         'Cache-Control': 'no-store',
         ...(row.feedback_hash !== null
           ? { 'X-Feedback-Hash': row.feedback_hash, ETag: `"${row.feedback_hash}"` }
