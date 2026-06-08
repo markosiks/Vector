@@ -156,6 +156,7 @@ describe('insertAttestation', () => {
       tag2: null,
       feedback_uri: null,
       feedback_hash: null,
+      feedback_detail: null,
       chain_state: 'optimistic',
       tx_hash: null,
       block_number: '12345',

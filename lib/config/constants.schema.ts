@@ -35,11 +35,9 @@ const httpUrl = z.string().url().startsWith('http');
  * in strict mode so a mistyped or wrong-checksum literal fails at module load
  * rather than silently pointing the app at the wrong contract.
  */
-const evmAddress = z
-  .string()
-  .refine((value) => isAddress(value, { strict: true }), {
-    message: 'must be a checksummed 0x-prefixed 20-byte EVM address',
-  });
+const evmAddress = z.string().refine((value) => isAddress(value, { strict: true }), {
+  message: 'must be a checksummed 0x-prefixed 20-byte EVM address',
+});
 
 /**
  * Scoring constants — §6.1. Penalties are intentionally asymmetric so a single
