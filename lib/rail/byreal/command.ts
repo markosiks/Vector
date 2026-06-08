@@ -20,8 +20,8 @@ import { resolveByrealMarket, type ByrealMarket } from './markets';
  * `transfer` never reaches the rail (the referee blocks it) and has no builder.
  */
 
-/** Strict decimal grammar: optional sign, digits, optional fractional part. */
-const DECIMAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
+/** Strict positive decimal grammar: leading digit (non-zero) + optional fraction. */
+const POSITIVE_DECIMAL = /^(?:0\.\d*[1-9]\d*|[1-9]\d*(?:\.\d+)?)$/;
 
 /** A builder error — the Intent cannot be expressed as a safe CLI command. */
 export class ByrealCommandError extends Error {
@@ -31,10 +31,18 @@ export class ByrealCommandError extends Error {
   }
 }
 
-/** Assert a value is a canonical decimal string; throw otherwise. */
-function decimal(field: string, value: string): string {
-  if (!DECIMAL.test(value)) {
-    throw new ByrealCommandError(`byreal command: ${field} is not a decimal value`);
+/**
+ * Assert a value is a canonical, strictly-positive decimal string; throw
+ * otherwise. Every numeric the rail puts in an order command (size, tp, sl) is a
+ * quantity or price that is always `> 0` for a valid Intent — the referee
+ * already rejects a non-positive size. Forbidding a leading `-` here is also
+ * defense-in-depth: it guarantees no field can ever land in a positional argv
+ * slot looking like an option token (`-1`) that a CLI parser might read as a
+ * flag, independent of the no-shell guarantee.
+ */
+function positiveDecimal(field: string, value: string): string {
+  if (!POSITIVE_DECIMAL.test(value)) {
+    throw new ByrealCommandError(`byreal command: ${field} is not a positive decimal value`);
   }
   return value;
 }
@@ -47,8 +55,8 @@ function side(intentSide: 'long' | 'short'): string {
 /** Append `--tp`/`--sl` flags when the Intent carries them (both optional). */
 function tpSlFlags(intent: { tp?: string | undefined; sl?: string | undefined }): string[] {
   const flags: string[] = [];
-  if (intent.tp !== undefined) flags.push('--tp', decimal('tp', intent.tp));
-  if (intent.sl !== undefined) flags.push('--sl', decimal('sl', intent.sl));
+  if (intent.tp !== undefined) flags.push('--tp', positiveDecimal('tp', intent.tp));
+  if (intent.sl !== undefined) flags.push('--sl', positiveDecimal('sl', intent.sl));
   return flags;
 }
 
@@ -76,7 +84,7 @@ export function buildSettlementCommand(intent: Intent): ByrealCommand | null {
   const market = resolveByrealMarket(intent.market);
   if (market === undefined) return null; // Not a Byreal market — defer to seed.
 
-  const size = decimal('size', intent.size);
+  const size = positiveDecimal('size', intent.size);
 
   if (intent.action === 'open') {
     return {
