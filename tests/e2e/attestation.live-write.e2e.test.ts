@@ -74,79 +74,75 @@ describeLive('ERC-8004 feedback write path (live Mantle Sepolia, funded wallets)
     mock.restore();
   });
 
-  test(
-    'register → giveFeedback → receipt → read-back round-trips against the live registry',
-    async () => {
-      const {
-        getIdentityWriteClient,
-        getIdentityReader,
-        getReputationReader,
-        getFeedbackWriteClient,
-        getAttestorAddress,
-        getOperatorAddress,
-        getMantlePublicClient,
-        assertDistinctSigners,
-      } = await import('@/lib/chain/client');
-      const { registerAgent, assertCanAttest } = await import('@/lib/chain/identity');
-      const { getLastIndex, readFeedback } = await import('@/lib/chain/registry');
+  test('register → giveFeedback → receipt → read-back round-trips against the live registry', async () => {
+    const {
+      getIdentityWriteClient,
+      getIdentityReader,
+      getReputationReader,
+      getFeedbackWriteClient,
+      getAttestorAddress,
+      getOperatorAddress,
+      getMantlePublicClient,
+      assertDistinctSigners,
+    } = await import('@/lib/chain/client');
+    const { registerAgent, assertCanAttest } = await import('@/lib/chain/identity');
+    const { getLastIndex, readFeedback } = await import('@/lib/chain/registry');
 
-      // The self-feedback guard is a configuration invariant: the operator owns
-      // every registered agent, so the attestor key MUST resolve elsewhere.
-      assertDistinctSigners();
-      expect(getOperatorAddress()).not.toBe(getAttestorAddress());
+    // The self-feedback guard is a configuration invariant: the operator owns
+    // every registered agent, so the attestor key MUST resolve elsewhere.
+    assertDistinctSigners();
+    expect(getOperatorAddress()).not.toBe(getAttestorAddress());
 
-      const identityAddress = CONFIG.chain.identity_registry_address as `0x${string}`;
+    const identityAddress = CONFIG.chain.identity_registry_address as `0x${string}`;
 
-      // 1) Register a fresh agent with the operator wallet — a real mint whose
-      //    tokenId is decoded from the `Registered` event in the receipt.
-      const agentURI = `https://vector.app/agents/live-${Date.now()}`;
-      const agentId = await registerAgent(getIdentityWriteClient(), identityAddress, agentURI);
-      expect(agentId).toBeGreaterThan(0n);
+    // 1) Register a fresh agent with the operator wallet — a real mint whose
+    //    tokenId is decoded from the `Registered` event in the receipt.
+    const agentURI = `https://vector.app/agents/live-${Date.now()}`;
+    const agentId = await registerAgent(getIdentityWriteClient(), identityAddress, agentURI);
+    expect(agentId).toBeGreaterThan(0n);
 
-      // Read-after-write barrier: wait until the just-minted token is visible on
-      // whichever replica serves our reads before exercising the read path.
-      const identityReader = getIdentityReader();
-      const owner = await waitFor('agent registration', () => identityReader.ownerOf(agentId));
-      expect(owner.toLowerCase()).toBe(getOperatorAddress().toLowerCase());
+    // Read-after-write barrier: wait until the just-minted token is visible on
+    // whichever replica serves our reads before exercising the read path.
+    const identityReader = getIdentityReader();
+    const owner = await waitFor('agent registration', () => identityReader.ownerOf(agentId));
+    expect(owner.toLowerCase()).toBe(getOperatorAddress().toLowerCase());
 
-      // 2) The production authorization pre-check, against the live registry:
-      //    registered (owner !== null) and not self-feedback (attestor is not
-      //    owner/operator). A throw here would mean the write would revert.
-      const attestor = getAttestorAddress();
-      await assertCanAttest(identityReader, attestor, agentId);
+    // 2) The production authorization pre-check, against the live registry:
+    //    registered (owner !== null) and not self-feedback (attestor is not
+    //    owner/operator). A throw here would mean the write would revert.
+    const attestor = getAttestorAddress();
+    await assertCanAttest(identityReader, attestor, agentId);
 
-      // 3) Issue exactly one real `giveFeedback` with the attestor wallet.
-      const feedbackHash = keccak256(toBytes(`live-detail-${agentId}`));
-      const txHash = await getFeedbackWriteClient().giveFeedback({
-        agentId,
-        value: 73n,
-        valueDecimals: 0,
-        tag1: 'r-live-1',
-        tag2: 'clean',
-        endpoint: '',
-        feedbackURI: `https://vector.app/feedback/${agentId}/r-live-1`,
-        feedbackHash,
-      });
-      expect(txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    // 3) Issue exactly one real `giveFeedback` with the attestor wallet.
+    const feedbackHash = keccak256(toBytes(`live-detail-${agentId}`));
+    const txHash = await getFeedbackWriteClient().giveFeedback({
+      agentId,
+      value: 73n,
+      valueDecimals: 0,
+      tag1: 'r-live-1',
+      tag2: 'clean',
+      endpoint: '',
+      feedbackURI: `https://vector.app/feedback/${agentId}/r-live-1`,
+      feedbackHash,
+    });
+    expect(txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
 
-      // 4) The write must actually commit, not just broadcast.
-      const receipt = await getMantlePublicClient().waitForTransactionReceipt({ hash: txHash });
-      expect(receipt.status).toBe('success');
+    // 4) The write must actually commit, not just broadcast.
+    const receipt = await getMantlePublicClient().waitForTransactionReceipt({ hash: txHash });
+    expect(receipt.status).toBe('success');
 
-      // 5) Read the feedback back off-chain and confirm the on-chain record
-      //    carries the exact values we wrote — the full write→read round-trip.
-      const reader = getReputationReader();
-      const lastIndex = await waitFor('feedback to be indexed', async () => {
-        const index = await getLastIndex(reader, agentId, attestor);
-        return index >= 1n ? index : null;
-      });
-      const feedback = await readFeedback(reader, agentId, attestor, lastIndex);
-      expect(feedback.value).toBe(73n);
-      expect(feedback.valueDecimals).toBe(0);
-      expect(feedback.tag1).toBe('r-live-1');
-      expect(feedback.tag2).toBe('clean');
-      expect(feedback.isRevoked).toBe(false);
-    },
-    120_000,
-  );
+    // 5) Read the feedback back off-chain and confirm the on-chain record
+    //    carries the exact values we wrote — the full write→read round-trip.
+    const reader = getReputationReader();
+    const lastIndex = await waitFor('feedback to be indexed', async () => {
+      const index = await getLastIndex(reader, agentId, attestor);
+      return index >= 1n ? index : null;
+    });
+    const feedback = await readFeedback(reader, agentId, attestor, lastIndex);
+    expect(feedback.value).toBe(73n);
+    expect(feedback.valueDecimals).toBe(0);
+    expect(feedback.tag1).toBe('r-live-1');
+    expect(feedback.tag2).toBe('clean');
+    expect(feedback.isRevoked).toBe(false);
+  }, 120_000);
 });

@@ -222,7 +222,9 @@ describe('e2e — extreme magnitudes', () => {
           db: sink,
           input: unstorable,
           ids: IDS,
-          state: cleanState({ agent: { allocation: '1e30', remaining_budget: '1e30', drawdown: '0' } }),
+          state: cleanState({
+            agent: { allocation: '1e30', remaining_budget: '1e30', drawdown: '0' },
+          }),
           validate,
         })
       ).decision,
