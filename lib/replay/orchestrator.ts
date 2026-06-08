@@ -6,7 +6,7 @@ import { insertIntentReserving, type NewIntent } from '@/lib/db/repos/intents';
 import { insertOutcome } from '@/lib/db/repos/outcomes';
 import { readKillSwitchState, type KillSwitchState } from '@/lib/db/repos/kill-switch';
 import { listPolicyEventsByAgentRound } from '@/lib/db/repos/policy-events';
-import { listOutcomesByAgentRound } from '@/lib/db/repos/outcomes';
+import { listSeedOutcomesByAgentRound } from '@/lib/db/repos/outcomes';
 import type { AgentRow, OutcomeRow, PolicyEventRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
 import type { Context, Intent } from '@/lib/intent/types';
@@ -103,6 +103,16 @@ export interface RunArcHooks {
 export interface RunArcOptions {
   /** Execution rail; defaults to the deterministic seed rail backed by the arc. */
   readonly rail?: Rail;
+  /**
+   * Optional **credibility** rail (P2.1): a live venue (Byreal) settled *in
+   * addition to* the deterministic seed rail. Allowed Intents that settle on the
+   * seed path are also offered to this rail; a non-null fill is recorded as a
+   * separate `executions(rail='byreal')` + `outcomes` pair for the verifiable
+   * surface, and is **excluded from scoring** (the §3 boundary). Failures are
+   * swallowed — the arc never depends on it. Unset (the default) ⇒ no Byreal
+   * rows ⇒ the arc is byte-identical.
+   */
+  readonly credibilityRail?: Rail;
   /** Timing slice; defaults to `CONFIG.timing`. */
   readonly timing?: SchedulerTiming;
   /** Extra validator options merged over the defaults (signer resolver, skew). */
@@ -225,6 +235,7 @@ async function processAgentTick(
   timing: SchedulerTiming,
   validate: ValidateOptions,
   rail: Rail,
+  credibilityRail: Rail | undefined,
 ): Promise<void> {
   const agent = getSeedAgent(agentId);
   if (agent === undefined) return;
@@ -320,6 +331,87 @@ async function processAgentTick(
     position_delta: fill.outcome.position_delta,
     drawdown: fill.outcome.drawdown,
   });
+
+  // Credibility settlement (P2.1): also settle the same allowed Intent on the
+  // live Byreal rail, recording a separate `rail='byreal'` execution+outcome for
+  // the verifiable surface. It is best-effort and *excluded from scoring*; a
+  // miss or error never affects the deterministic seed settlement above.
+  await settleCredibility(db, credibilityRail, {
+    intent: executed,
+    agentId,
+    tickIndex: tick.index,
+    intentHash: validated.intent_hash,
+    intentId: intentRow.id,
+    agentUuid,
+    roundId: round.id,
+  });
+}
+
+/** Inputs to the credibility settlement: the executed Intent plus its row ids. */
+interface CredibilitySettleArgs {
+  readonly intent: Intent;
+  readonly agentId: string;
+  readonly tickIndex: number;
+  readonly intentHash: string;
+  readonly intentId: string;
+  readonly agentUuid: string;
+  readonly roundId: string;
+}
+
+/**
+ * Settle an allowed Intent on the optional credibility rail (P2.1) and persist
+ * its real fill as a `rail='byreal'` execution + outcome.
+ *
+ * This is a strict side-channel: it runs *after* the deterministic seed
+ * settlement, never mutates it, and is fully guarded — a `null` fill (the rail
+ * deferred) or any thrown error is swallowed so the arc never stalls or diverges
+ * on a live-venue hiccup. Its outcome rows are excluded from scoring by
+ * {@link listSeedOutcomesByAgentRound}, preserving the §3 determinism boundary.
+ */
+async function settleCredibility(
+  db: Queryable,
+  rail: Rail | undefined,
+  args: CredibilitySettleArgs,
+): Promise<void> {
+  if (rail === undefined) return;
+  try {
+    const fill = await rail.execute({
+      intent: args.intent,
+      agentId: args.agentId,
+      tickIndex: args.tickIndex,
+      intentHash: args.intentHash,
+    });
+    if (fill === null) return; // Rail deferred — nothing to record.
+
+    const execution = await insertExecution(db, {
+      intent_id: args.intentId,
+      status: fill.status,
+      rail: 'byreal',
+      rail_order_id: fill.rail_order_id ?? null,
+      request_json: args.intent,
+      response_json: fill.response ?? fill.outcome,
+    });
+    await insertOutcome(db, {
+      agent_id: args.agentUuid,
+      round_id: args.roundId,
+      execution_id: execution.id,
+      pnl_realized: fill.outcome.pnl_realized,
+      pnl_marked: fill.outcome.pnl_marked,
+      capital_at_risk: fill.outcome.capital_at_risk,
+      fees: fill.outcome.fees,
+      position_delta: fill.outcome.position_delta,
+      drawdown: fill.outcome.drawdown,
+    });
+  } catch (err) {
+    // The credibility rail is best-effort: a live-rail outage/timeout/parse miss
+    // — or a failed DB write of the byreal row — must NOT stall the deterministic
+    // arc. The seed settlement already stands and the score is unaffected, so we
+    // degrade silently. We still emit an operator signal (name only, never the
+    // intent payload or credentials) so a persistently failing rail or a DB write
+    // fault is observable rather than vanishing without trace.
+    const name = err instanceof Error ? err.name : 'unknown';
+    console.error(`[byreal] credibility settle failed (seed settlement stands): ${name}`);
+  }
 }
 
 /**
@@ -344,7 +436,10 @@ async function settleRound(
     for (const agent of SEED_AGENTS) {
       const uuid = setup.agentsBySeedId.get(agent.id)?.id;
       if (uuid === undefined) continue;
-      const outcomes = await listOutcomesByAgentRound(db, uuid, round.id);
+      // Seed-only read: the Byreal credibility rail (P2.1) may have written
+      // `rail='byreal'` outcomes for this agent/round, but the deterministic
+      // score must never see them (the §3 determinism boundary).
+      const outcomes = await listSeedOutcomesByAgentRound(db, uuid, round.id);
       const events = await listPolicyEventsByAgentRound(db, uuid, round.id);
       const inputs = deriveScoreInputs(outcomes, events);
       const { result } = await recordScore({ db, agentId: uuid, roundId: round.id, inputs });
@@ -452,6 +547,7 @@ export async function runArc(
         timing,
         validate,
         rail,
+        options.credibilityRail,
       );
     }
 
