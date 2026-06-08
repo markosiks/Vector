@@ -57,6 +57,20 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
   let calls = 0;
   let budgetExhaustedLogged = false;
 
+  /**
+   * Emit one observability event. The logger is caller-supplied and may throw
+   * (its contract forbids logging secrets, not throwing); isolating it here means
+   * a broken sink can never alter control flow, reject the detached fetch, or
+   * throw into the synchronous tick path. Logging is best-effort, never load-bearing.
+   */
+  function log(event: Parameters<NansenLogger>[0]): void {
+    try {
+      deps.logger?.(event);
+    } catch {
+      /* a failing observability sink must never affect the arc */
+    }
+  }
+
   /** Last *successfully fetched* snapshot — survives later failures (fail-open). */
   function current(): NansenSignal | undefined {
     return cache?.value;
@@ -75,11 +89,11 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
   /** The detached fetch body. Never rejects: all failures are swallowed here. */
   async function runFetch(): Promise<void> {
     calls += 1;
-    deps.logger?.({ type: 'fetch_start', endpoint: endpointLabel, calls });
+    log({ type: 'fetch_start', endpoint: endpointLabel, calls });
     try {
       const value = await deps.client.fetchSignal();
       cache = { value, storedAtMs: now() };
-      deps.logger?.({
+      log({
         type: 'fetch_success',
         endpoint: endpointLabel,
         calls,
@@ -87,7 +101,7 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
       });
     } catch (err) {
       // Fail-open: keep the last good snapshot; surface only a redacted reason.
-      deps.logger?.({
+      log({
         type: 'fetch_error',
         endpoint: endpointLabel,
         calls,
@@ -103,7 +117,7 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
     if (deps.maxCalls !== undefined && calls >= deps.maxCalls) {
       if (!budgetExhaustedLogged) {
         budgetExhaustedLogged = true;
-        deps.logger?.({ type: 'budget_exhausted', endpoint: endpointLabel, calls });
+        log({ type: 'budget_exhausted', endpoint: endpointLabel, calls });
       }
       return; // Budget spent: hard-stop new fetches, keep serving the cache.
     }

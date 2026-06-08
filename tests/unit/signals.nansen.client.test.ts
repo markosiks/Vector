@@ -207,3 +207,70 @@ describe('nansen client — typed failures', () => {
     expect((err as NansenTimeoutError).timeoutMs).toBe(5);
   });
 });
+
+describe('nansen client — network hardening (audit regressions)', () => {
+  test('refuses to follow redirects (redirect: "error") so the key cannot leak cross-origin', async () => {
+    const { fetchImpl, calls } = stubFetch(jsonResponse([]));
+    const client = createNansenClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl });
+    await client.fetchSignal();
+    expect(calls[0]!.init?.redirect).toBe('error');
+  });
+
+  test('a slow-drip body (headers fast, body never completes) → NansenTimeoutError', async () => {
+    // Headers resolve immediately; `text()` only settles when the request signal
+    // aborts. This pins the fix that the timeout spans the body read, not just
+    // the header phase.
+    const fetchImpl = ((_url: string, init?: RequestInit) => {
+      const sig = init?.signal;
+      const res = {
+        status: 200,
+        ok: true,
+        headers: { get: () => null },
+        text: () =>
+          new Promise<string>((_resolve, reject) => {
+            sig?.addEventListener('abort', () => {
+              const e = new Error('aborted');
+              e.name = 'AbortError';
+              reject(e);
+            });
+          }),
+      };
+      return Promise.resolve(res);
+    }) as unknown as typeof fetch;
+
+    const client = createNansenClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl, timeoutMs: 5 });
+    const err = await client.fetchSignal().catch((e) => e);
+    expect(err).toBeInstanceOf(NansenTimeoutError);
+  });
+
+  test('caps how many raw rows it scans: usable rows past the scan cap are not reached', async () => {
+    // 6000 unusable `{}` rows precede a valid one. With the 5000-row scan cap the
+    // valid row at index 6000 is never scanned, so the result is empty — proving
+    // the loop stops instead of grinding through the whole (attacker-sized) array.
+    const rows: unknown[] = Array.from({ length: 6_000 }, () => ({}));
+    rows.push({ symbol: 'LATE', netflowUsd: '123' });
+    const { fetchImpl } = stubFetch(jsonResponse(rows));
+    const client = createNansenClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl });
+    const out = await client.fetchSignal();
+    expect(out.netflows).toHaveLength(0);
+  });
+
+  test('Retry-After is clamped: negative/huge/non-numeric values are sanitized', async () => {
+    const cases: [string, number | undefined][] = [
+      ['2', 2_000], // normal
+      ['-5', undefined], // negative → dropped
+      ['0', undefined], // zero → dropped
+      ['999999999', 5 * 60 * 1_000], // absurd → clamped to 5 min
+      ['Mon, 01 Jan 2030 00:00:00 GMT', undefined], // HTTP-date form → not a delta-seconds number
+    ];
+    for (const [header, expected] of cases) {
+      const { fetchImpl } = stubFetch(
+        new Response('{}', { status: 429, headers: { 'retry-after': header } }),
+      );
+      const client = createNansenClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl });
+      const err = await client.fetchSignal().catch((e) => e);
+      expect(err).toBeInstanceOf(NansenRateLimitError);
+      expect((err as NansenRateLimitError).retryAfterMs).toBe(expected);
+    }
+  });
+});

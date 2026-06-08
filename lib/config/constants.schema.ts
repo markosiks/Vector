@@ -31,6 +31,13 @@ const positiveInt = z.number().int().positive();
 const httpUrl = z.string().url().startsWith('http');
 
 /**
+ * An `https`-only URL. Required for endpoints that carry a secret (e.g. an API
+ * key in a request header) so the credential can never transit in cleartext if
+ * the config is overridden.
+ */
+const httpsUrl = z.string().url().startsWith('https://');
+
+/**
  * A checksummed EVM address (`0x` + 40 hex). Validated with viem's `isAddress`
  * in strict mode so a mistyped or wrong-checksum literal fails at module load
  * rather than silently pointing the app at the wrong contract.
@@ -100,8 +107,8 @@ export const timingSchema = z.object({
 export const nansenSchema = z.object({
   /** Fetch the Nansen signal once per this many ticks (slow cadence). */
   poll_every_n_ticks: positiveInt,
-  /** Nansen API base URL (non-secret). */
-  endpoint: httpUrl,
+  /** Nansen API base URL. `https`-only: the API key rides in a request header. */
+  endpoint: httpsUrl,
   /** Cache TTL for the Nansen signal in milliseconds. */
   cache_ttl_ms: positiveInt,
 });
