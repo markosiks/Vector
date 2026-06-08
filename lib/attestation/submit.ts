@@ -1,6 +1,7 @@
 import type { Address, Hex } from 'viem';
 
 import { parseOnchainAgentId } from '@/lib/chain/agent-id';
+import { INT128_MAX, INT128_MIN } from '@/lib/attestation/encode';
 import { assertCanAttest, type IdentityReader } from '@/lib/chain/identity';
 import { getAttestationById, recordAttestationSubmission } from '@/lib/db/repos/attestations';
 import type { AttestationRow } from '@/lib/db/schema';
@@ -101,12 +102,24 @@ export function buildFeedbackUri(baseUrl: string, attestationId: string): string
   return `${base}/api/attestations/${encodeURIComponent(attestationId)}/feedback`;
 }
 
-/** Parse the stored `numeric(39,0)` value into an exact `int128` bigint. */
+/**
+ * Parse the stored `numeric(39,0)` value into an exact `int128` bigint.
+ *
+ * The column is wider than `int128`, so a value persisted by any path other than
+ * the bounded scorer (or a corrupt/hand-edited row) could exceed the registry's
+ * `int128 value` argument. Range-check it *here*, at the chain-write boundary, so
+ * an out-of-range value is a deterministic typed error before any gas is spent —
+ * rather than a cryptic ABI-encoding throw deep inside the writer.
+ */
 function toInt128(value: string): bigint {
   if (!INTEGER_RE.test(value)) {
     throw new AttestationSubmitError('attestation value is not an integer');
   }
-  return BigInt(value);
+  const parsed = BigInt(value);
+  if (parsed < INT128_MIN || parsed > INT128_MAX) {
+    throw new AttestationSubmitError('attestation value is out of int128 range');
+  }
+  return parsed;
 }
 
 /** Assert the stored feedback hash is a well-formed `bytes32` before the write. */
