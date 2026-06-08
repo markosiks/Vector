@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import {
   policyEventRow,
   type PolicyDecision,
@@ -5,7 +7,16 @@ import {
   type PolicySeverity,
 } from '../schema';
 import type { Queryable } from '../types';
-import { insertOne, type Keyset, keysetBefore, selectMany } from './_shared';
+import { CURSOR_KEY_SQL, insertOne, type Keyset, keysetBefore, selectMany } from './_shared';
+
+/**
+ * A page row carries the microsecond-precision {@link CURSOR_KEY_SQL} alias
+ * alongside the domain row, so {@link import('../../api/respond').paginate} mints
+ * the next cursor from the exact stored timestamp rather than a millisecond-
+ * truncated `Date`.
+ */
+const policyEventPageRow = policyEventRow.extend({ cursor_t: z.string() });
+export type PolicyEventPageRow = z.infer<typeof policyEventPageRow>;
 
 /** Fields accepted when recording a referee decision. */
 export interface NewPolicyEvent {
@@ -57,15 +68,15 @@ export function listPolicyEventsPage(
   db: Queryable,
   limit: number,
   before?: Keyset,
-): Promise<PolicyEventRow[]> {
+): Promise<PolicyEventPageRow[]> {
   const params: unknown[] = [];
   const where = before === undefined ? '' : `WHERE ${keysetBefore(before, params)} `;
   params.push(limit);
   return selectMany(
     db,
-    `SELECT * FROM policy_events ${where}ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
+    `SELECT *, ${CURSOR_KEY_SQL} FROM policy_events ${where}ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
     params,
-    policyEventRow,
+    policyEventPageRow,
   );
 }
 
