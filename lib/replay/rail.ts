@@ -33,6 +33,13 @@ export interface RailRequest {
   readonly agentId: string;
   /** Global tick ordinal (the seed rail keys its fill on this). */
   readonly tickIndex: number;
+  /**
+   * Canonical `intent_hash` of the Intent being settled, when known. The seed
+   * rail ignores it; a live rail (P2.1) uses it as the idempotency key so a
+   * retry never places a second order. Optional so existing callers and the
+   * deterministic seed path are unaffected.
+   */
+  readonly intentHash?: string;
 }
 
 /** An execution rail: settles an allowed Intent, or returns `null` to defer to fallback. */
