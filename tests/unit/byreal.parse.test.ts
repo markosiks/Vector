@@ -104,6 +104,26 @@ describe('parseOrderResult', () => {
     expect(r).toMatchObject({ realizedPnl: '0', fees: '0', filledSize: '0' });
   });
 
+  test('an acknowledged order with no fill and nothing resting → sent, not filled', () => {
+    const r = parseOrderResult({ oid: 1 });
+    expect(r.status).toBe('sent');
+  });
+
+  test('a maker rebate (negative fee) clamps to 0 to satisfy fees >= 0', () => {
+    const r = parseOrderResult({ oid: 1, fee: '-0.5' });
+    expect(r.fees).toBe('0');
+  });
+
+  test('negative-zero PnL is canonicalized to 0', () => {
+    const r = parseOrderResult({ oid: 1, closedPnl: '-0' });
+    expect(r.realizedPnl).toBe('0');
+  });
+
+  test('a tiny numeric fee is stored as fixed-point, never exponent form', () => {
+    const r = parseOrderResult({ oid: 1, fee: 0.00000005 });
+    expect(r.fees).toBe('0.00000005');
+  });
+
   test('throws when no order id can be found (no settlement to record)', () => {
     expect(() => parseOrderResult({ filled: { totalSz: '1' } })).toThrow(ByrealParseError);
   });
