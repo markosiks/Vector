@@ -7,6 +7,7 @@ import {
   createWalletClient,
   getAddress,
   http,
+  TransactionReceiptNotFoundError,
   type Account,
   type Address,
   type Hex,
@@ -27,6 +28,8 @@ import {
 } from './operator.schema';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { RegistryReadFn, ReputationReader } from './registry';
+import type { FeedbackWriteArgs, FeedbackWriteClient } from '@/lib/attestation/submit';
+import type { FeedbackReceipt, ReceiptReader } from '@/lib/attestation/reconcile';
 
 /**
  * Server-only chain access for Mantle Sepolia (P1.7).
@@ -242,6 +245,61 @@ export function getIdentityWriteClient(): IdentityWriteClient {
     waitForReceipt: async (hash: Hex) => {
       const receipt = await publicReader.waitForTransactionReceipt({ hash });
       return { status: receipt.status, logs: receipt.logs };
+    },
+  };
+}
+
+/**
+ * A {@link FeedbackWriteClient} backed by the **attestor** wallet — the registry
+ * authorizes feedback by `msg.sender`, so this is the third-party author that
+ * must *not* own the agent. Returns the raw transaction hash; reconciliation of
+ * the receipt is the watcher's job ({@link getReceiptReader}).
+ */
+export function getFeedbackWriteClient(): FeedbackWriteClient {
+  const wallet = getMantleAttestorWalletClient();
+  const address = CONFIG.chain.reputation_registry_address as Address;
+  const account = getAttestorAccount();
+  return {
+    giveFeedback: (args: FeedbackWriteArgs): Promise<Hex> =>
+      wallet.writeContract({
+        address,
+        abi: reputationRegistryAbi,
+        functionName: 'giveFeedback',
+        args: [
+          args.agentId,
+          args.value,
+          args.valueDecimals,
+          args.tag1,
+          args.tag2,
+          args.endpoint,
+          args.feedbackURI,
+          args.feedbackHash,
+        ],
+        account,
+        chain: mantleSepolia,
+      } as Parameters<typeof wallet.writeContract>[0]),
+  };
+}
+
+/**
+ * A {@link ReceiptReader} backed by the public client. A still-pending
+ * transaction (`TransactionReceiptNotFoundError`) maps to `null` — the watcher's
+ * "keep polling" signal — while a transport failure propagates so the watcher
+ * treats it as a flap (retry) rather than a false `failed`.
+ */
+export function getReceiptReader(): ReceiptReader {
+  const client = getMantlePublicClient();
+  return {
+    getReceipt: async (hash: Hex): Promise<FeedbackReceipt | null> => {
+      try {
+        const receipt = await client.getTransactionReceipt({ hash });
+        return { status: receipt.status, blockNumber: receipt.blockNumber };
+      } catch (error) {
+        if (error instanceof TransactionReceiptNotFoundError) {
+          return null;
+        }
+        throw error;
+      }
     },
   };
 }

@@ -100,8 +100,7 @@ export interface Keyset {
  * boundary in the audit feeds. Selecting the key at full precision in SQL and
  * binding it straight back as `::timestamptz` keeps the comparison exact.
  */
-export const CURSOR_KEY_SQL =
-  `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_t`;
+export const CURSOR_KEY_SQL = `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_t`;
 
 /**
  * Append a keyset (seek) predicate for a feed ordered `created_at DESC, id DESC`

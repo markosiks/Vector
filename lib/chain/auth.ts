@@ -28,11 +28,7 @@ import { getAddress, recoverMessageAddress, type Address, type Hex } from 'viem'
 
 /** The minimal client capability needed for ERC-1271 (smart-account) checks. */
 export interface SignatureVerifier {
-  verifyMessage(args: {
-    address: Address;
-    message: string;
-    signature: Hex;
-  }): Promise<boolean>;
+  verifyMessage(args: { address: Address; message: string; signature: Hex }): Promise<boolean>;
 }
 
 /**

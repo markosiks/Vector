@@ -78,7 +78,11 @@ function fakeWriter(receipt: RegisterReceipt): IdentityWriteClient {
 
 describe('registerAgent', () => {
   test('returns the minted tokenId decoded from the Registered event', async () => {
-    const agentId = await registerAgent(fakeWriter(receiptWith(7n, IDENTITY)), IDENTITY, 'ipfs://card');
+    const agentId = await registerAgent(
+      fakeWriter(receiptWith(7n, IDENTITY)),
+      IDENTITY,
+      'ipfs://card',
+    );
     expect(agentId).toBe(7n);
   });
 

@@ -109,6 +109,7 @@ export const attestationRowFixture: AttestationRow = {
   tag2: null,
   feedback_uri: 'ipfs://x',
   feedback_hash: `0x${'a'.repeat(64)}`,
+  feedback_detail: null,
   chain_state: 'confirmed',
   tx_hash: `0x${'b'.repeat(64)}`,
   block_number: '12345678',
