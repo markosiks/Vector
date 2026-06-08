@@ -61,8 +61,8 @@ async function setupSchema(): Promise<Harness> {
     return Number((rows[0] as { n: string }).n);
   };
   const scores = async (): Promise<string[]> => {
-    const { rows } = await client.query('SELECT value FROM scores ORDER BY value ASC');
-    return (rows as { value: string }[]).map((r) => r.value);
+    const { rows } = await client.query('SELECT score_r FROM scores ORDER BY score_r ASC');
+    return (rows as { score_r: string }[]).map((r) => r.score_r);
   };
   return {
     client,
