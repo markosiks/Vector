@@ -1,6 +1,9 @@
+import { z } from 'zod';
+
 import { attestationRow, type AttestationRow, type ChainState } from '../schema';
 import type { Queryable } from '../types';
 import {
+  CURSOR_KEY_SQL,
   insertOne,
   type Keyset,
   keysetBefore,
@@ -8,6 +11,13 @@ import {
   selectMany,
   type NumericInput,
 } from './_shared';
+
+/**
+ * A page row carries the microsecond-precision {@link CURSOR_KEY_SQL} alias
+ * alongside the domain row (see {@link import('../../api/respond').paginate}).
+ */
+const attestationPageRow = attestationRow.extend({ cursor_t: z.string() });
+export type AttestationPageRow = z.infer<typeof attestationPageRow>;
 
 /** Fields accepted when mirroring an ERC-8004 attestation into Neon. */
 export interface NewAttestation {
@@ -84,7 +94,7 @@ export interface AttestationPageParams {
 export function listAttestationsPage(
   db: Queryable,
   params: AttestationPageParams,
-): Promise<AttestationRow[]> {
+): Promise<AttestationPageRow[]> {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
@@ -100,8 +110,8 @@ export function listAttestationsPage(
   values.push(params.limit);
   return selectMany(
     db,
-    `SELECT * FROM attestations ${where}ORDER BY created_at DESC, id DESC LIMIT $${values.length}`,
+    `SELECT *, ${CURSOR_KEY_SQL} FROM attestations ${where}ORDER BY created_at DESC, id DESC LIMIT $${values.length}`,
     values,
-    attestationRow,
+    attestationPageRow,
   );
 }

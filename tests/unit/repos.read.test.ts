@@ -75,6 +75,17 @@ describe('listPolicyEventsPage', () => {
     expect(sql).toContain('LIMIT $3');
     expect(db.last?.params).toEqual([TS, ID, 50]);
   });
+
+  test('selects a microsecond-precision cursor_t key (avoids ms-truncation row loss)', async () => {
+    const db = new SpyDb();
+    await listPolicyEventsPage(db, 50);
+    const sql = db.last?.sql ?? '';
+    // The driver truncates timestamptz to ms; the cursor must come from SQL at
+    // full microsecond precision, not from the row's JS Date.
+    expect(sql).toContain("to_char(created_at AT TIME ZONE 'UTC'");
+    expect(sql).toContain('.US"Z"');
+    expect(sql).toContain('AS cursor_t');
+  });
 });
 
 describe('listRecentPolicyEventsByAgent', () => {
