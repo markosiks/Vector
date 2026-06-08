@@ -67,6 +67,46 @@ describeChain('Mantle Sepolia ERC-8004 Reputation Registry (real RPC)', () => {
     await expect(getIdentityRegistry(reader)).rejects.toBeDefined();
   });
 
+  // Verifies the hand-authored `identityRegistryAbi` against the LIVE v2
+  // contract (the published abis/IdentityRegistry.json is stale and lacks
+  // isAuthorizedOrOwner), and proves the identity reader's existence semantics.
+  test('identity reader: a canonical registered agent exists; a huge id does not', async () => {
+    const { getIdentityReader } = await import('@/lib/chain/client');
+    const { agentExists } = await import('@/lib/chain/identity');
+    const reader = getIdentityReader();
+
+    // tokenId 1 is a pre-existing registered agent on the shared testnet registry.
+    expect(await agentExists(reader, 1n)).toBe(true);
+    const owner = await reader.ownerOf(1n);
+    expect(owner).not.toBeNull();
+    // The owner is, by definition, authorized over its own agent.
+    expect(await reader.isAuthorizedOrOwner(owner as `0x${string}`, 1n)).toBe(true);
+    // A random address is not.
+    expect(
+      await reader.isAuthorizedOrOwner('0x1111111111111111111111111111111111111111', 1n),
+    ).toBe(false);
+    // An almost-certainly-unminted id reads back as "does not exist", not a throw.
+    expect(await agentExists(reader, (1n << 200n) + 12345n)).toBe(false);
+  });
+
+  test('assertCanAttest blocks self-feedback and unregistered agents against the live registry', async () => {
+    const { getIdentityReader } = await import('@/lib/chain/client');
+    const { assertCanAttest } = await import('@/lib/chain/identity');
+    const reader = getIdentityReader();
+    const owner = (await reader.ownerOf(1n)) as `0x${string}`;
+
+    // Owner attesting its own agent → rejected (mirrors the on-chain guard).
+    await expect(assertCanAttest(reader, owner, 1n)).rejects.toThrow(/self-feedback/i);
+    // A distinct attestor over a registered agent → allowed.
+    await expect(
+      assertCanAttest(reader, '0x1111111111111111111111111111111111111111', 1n),
+    ).resolves.toBeUndefined();
+    // Unregistered agent → rejected before any write.
+    await expect(
+      assertCanAttest(reader, '0x1111111111111111111111111111111111111111', (1n << 200n) + 7n),
+    ).rejects.toThrow(/not registered/);
+  });
+
   afterAll(async () => {
     const { resetChainClients } = await import('@/lib/chain/client');
     resetChainClients();

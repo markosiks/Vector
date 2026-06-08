@@ -70,8 +70,15 @@ export const envSchema = z.object({
   NANSEN_API_KEY: secret.optional(),
   /** Elfa API key (P3.1). Secret. Optional until its stage. */
   ELFA_API_KEY: secret.optional(),
-  /** Operator key used for attestation writes. Secret. Optional until its stage. */
+  /** Owner key that registers agents in the Identity Registry. Secret. Optional until its stage. */
   OPERATOR_PRIVATE_KEY: secret.optional(),
+  /**
+   * Attestor key that authors feedback writes. Secret. Optional until its stage.
+   * MUST resolve to a different address than OPERATOR_PRIVATE_KEY: the registry
+   * rejects feedback from an agent's owner/operator (self-feedback). The
+   * distinctness invariant is enforced at the client (`assertDistinctSigners`).
+   */
+  ATTESTOR_PRIVATE_KEY: secret.optional(),
   /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
   GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
 });
