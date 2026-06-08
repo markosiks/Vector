@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { intentRow, type IntentAction, type IntentRow, type IntentSide } from '../schema';
 import type { Queryable } from '../types';
 import {
@@ -91,6 +93,26 @@ export async function isNonceUsed(db: Queryable, agentId: string, nonce: string)
 
 export function getIntent(db: Queryable, id: string): Promise<IntentRow | null> {
   return selectOne(db, 'SELECT * FROM intents WHERE id = $1', [id], intentRow);
+}
+
+/**
+ * The intent hashes an agent submitted in one round, oldest first — the audit
+ * trail folded into a round's attestation detail document. Ordered by
+ * `created_at, id` so the list (and therefore the detail hash) is deterministic
+ * even when several intents share a tick's `created_at`.
+ */
+export async function listIntentHashesByAgentRound(
+  db: Queryable,
+  agentId: string,
+  roundId: string,
+): Promise<string[]> {
+  const { rows } = await db.query(
+    `SELECT intent_hash FROM intents
+      WHERE agent_id = $1 AND round_id = $2
+      ORDER BY created_at ASC, id ASC`,
+    [agentId, roundId],
+  );
+  return rows.map((r) => z.string().parse((r as { intent_hash: unknown }).intent_hash));
 }
 
 /** Agent-detail read: an agent's most recent intents, newest first. */

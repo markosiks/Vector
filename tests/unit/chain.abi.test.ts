@@ -42,9 +42,7 @@ describe('reputationRegistryAbi vs vendored JSON', () => {
   });
 
   test('curated surface exposes no admin/upgrade functions', () => {
-    const names = reputationRegistryAbi
-      .filter((e) => e.type === 'function')
-      .map((e) => e.name);
+    const names = reputationRegistryAbi.filter((e) => e.type === 'function').map((e) => e.name);
     for (const forbidden of [
       'initialize',
       'upgradeToAndCall',
