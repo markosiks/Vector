@@ -65,17 +65,57 @@ throwing on malformed input.
 ## agentId provenance (Identity Registry coupling)
 
 A Reputation Registry `agentId` is the **ERC-721 tokenId in the Identity
-Registry**. The operator deterministically assigns each seed agent a stable id
-from the frozen roster order (`lib/chain/agent-id.ts`,
-`seedOnchainIdAssignments()`), stamped into `agents.agent_id_onchain`.
+Registry** — it cannot be invented. `IdentityRegistry.register(uri)` is a
+permissionless self-mint: `msg.sender` becomes the agent's owner and receives a
+fresh, auto-incrementing tokenId (`agentId = _lastId++`), emitted as
+`Registered(uint256 indexed agentId, string agentURI, address indexed owner)`.
 
-> ⚠️ A `giveFeedback` write against the **canonical** registry additionally
-> requires that `agentId` be a **registered tokenId in the canonical Identity
-> Registry**. Registering/minting agents there is ROADMAP and out of P1.7 scope.
-> Until that lands, P1.8 must either (a) register these ids in the canonical
-> Identity Registry, or (b) run against a Vector-owned registry pair. The
-> prompt's "operator assigns agent_id freely" therefore does not by itself make
-> an agent writable against the shared registry — this is a P1.8 prerequisite.
+> ⚠️ **Resolved blocker (was a real footgun).** An earlier revision assigned each
+> seed agent a 1-based id (`1, 2, 3, …`) from the roster order. On the canonical
+> registry those tokenIds are **already owned by an unrelated party**
+> (`ownerOf(1)` → `0x3D75…`), so writing feedback against them would attest
+> *someone else's* agent and revert the self-feedback guard. That placeholder
+> assignment has been **removed**.
+
+The data model is now **null-until-registered** (matches §7.1,
+`agents.agent_id_onchain` is "nullable until registered"):
+
+- A seed agent has **no** on-chain id until it is really registered. Its
+  `agents.agent_id_onchain` stays `NULL`.
+- `lib/chain/identity.ts` `registerAgent(client, identityAddress, agentURI)`
+  performs the mint **with the owner key** and returns the minted tokenId,
+  decoded from the `Registered` event in the confirmed receipt — never guessed.
+  That tokenId is persisted into `agents.agent_id_onchain`.
+- On the read/write path, `lib/chain/agent-id.ts` `parseOnchainAgentId(value)`
+  validates the stored value into a `uint256`, throwing if `NULL`/malformed so a
+  feedback write **fails closed** instead of inventing or reusing an id. The
+  non-throwing `tryOnchainAgentId` is for display paths that tolerate
+  not-yet-registered agents.
+- Before any `giveFeedback`, `assertCanAttest(reader, attestor, agentId)` checks
+  on-chain that the agent **exists** and that the attestor is **not** its
+  owner/operator — turning both possible reverts (`ERC721NonexistentToken`,
+  `Self-feedback not allowed`) into deterministic, typed errors.
+
+### Identity registration runbook (path A — register in the canonical registry)
+
+This is the minimal, reversible path that makes the seed agents writable on the
+shared registry, with **no contract deploy**:
+
+1. Configure two distinct keys (see below): `OPERATOR_PRIVATE_KEY` (owner) and
+   `ATTESTOR_PRIVATE_KEY` (feedback author). Fund the **operator** address with
+   Mantle Sepolia MNT for registration gas.
+2. For each seed agent without an `agent_id_onchain`, call `registerAgent(...)`
+   with the agent card URI. Persist the returned tokenId into
+   `agents.agent_id_onchain` (idempotent: skip agents that already have one).
+3. From then on, feedback writes (P1.8) read `agent_id_onchain`, run
+   `assertCanAttest` with the **attestor** address, and call `giveFeedback` from
+   the attestor wallet.
+
+The contract surface for this lives in the typed `identityRegistryAbi`
+(`lib/chain/abi.ts`). Note: the *published* `abis/IdentityRegistry.json` predates
+the deployed **v2** contract and is **missing `isAuthorizedOrOwner`**, so it is
+**not** vendored; the typed subset is authored from the v2 source and verified
+against the **live** contract by the gated integration suite.
 
 ## Integration surface
 
@@ -90,7 +130,12 @@ from the frozen roster order (`lib/chain/agent-id.ts`,
   `getAgentSummary`, `readFeedback`. Validates every untrusted input
   (agentId/uint bounds, address format) **before** the RPC and every response
   shape **after**, surfacing a typed `RegistryError` — never a panic.
-- `lib/chain/operator.schema.ts` — pure, value-free operator-key parsing.
+- `lib/chain/operator.schema.ts` — pure, value-free signing-key parsing for
+  both keys (`parseOperatorKey`, `parseAttestorKey`) plus the
+  `assertDistinctSignerKeys` two-key invariant.
+- `lib/chain/identity.ts` — Identity Registry access (DI on `IdentityReader` /
+  `IdentityWriteClient`): `agentExists`, `assertCanAttest` (the two-key/self-
+  feedback guard), and `registerAgent` (mint + decode the minted tokenId).
 
 ### Quirk: `getSummary` has no "all clients" sentinel
 
@@ -113,15 +158,22 @@ const result = await smokeRead(
 // → { address, deployed: true, identityRegistry, version: '2.0.0' }
 ```
 
-## Operator key runbook
+## Signing-key runbook (two keys)
 
-- **Storage:** `OPERATOR_PRIVATE_KEY` lives only in server env (`ENV`,
-  `server-only`). It never enters the client bundle, never appears in logs or
-  error messages (parser rejections are value-free), and is read lazily so a
-  read-only deploy needs no key.
-- **Funding:** the operator address (`getOperatorAddress()`) must hold Mantle
-  Sepolia MNT to pay gas for `giveFeedback` (P1.8). Fund via a Mantle Sepolia
-  faucet.
+- **Two distinct keys, enforced.** `OPERATOR_PRIVATE_KEY` (owner: registers
+  agents) and `ATTESTOR_PRIVATE_KEY` (author: writes feedback) **must** resolve
+  to different addresses. `assertDistinctSigners()` (via the pure
+  `assertDistinctSignerKeys`) fails closed if they match, because the registry
+  rejects feedback from an agent's owner/operator and the operator key owns every
+  registered agent — a shared key would make every `giveFeedback` revert.
+- **Storage:** both keys live only in server env (`ENV`, `server-only`). They
+  never enter the client bundle, never appear in logs or error messages (parser
+  rejections are value-free), and are read lazily so a read-only deploy needs no
+  key.
+- **Funding:** the **operator** address (`getOperatorAddress()`) pays gas for
+  `register` (identity registration); the **attestor** address
+  (`getAttestorAddress()`) pays gas for `giveFeedback` (P1.8). Fund both via a
+  Mantle Sepolia faucet.
 - **Nonce/gas:** viem estimates gas and manages the nonce per transaction. Under
   concurrent writes, serialize through a single in-flight operation upstream
   (P1.8) rather than racing the nonce from multiple callers on one key.
@@ -133,9 +185,12 @@ const result = await smokeRead(
 ## Tests
 
 - `tests/unit/chain.*.test.ts` — ABI/drift, registry input+output validation,
-  operator key, network def, agentId assignment, EIP-191/ERC-1271 auth.
-- `tests/fuzz/chain.fuzz.test.ts` — every untrusted input/response is handled or
-  typed-rejected, never an untyped throw.
+  signing keys + two-key distinctness, network def, `parseOnchainAgentId`
+  validation, identity reader/`assertCanAttest`/`registerAgent`, EIP-191/ERC-1271
+  auth.
+- `tests/fuzz/chain.*.fuzz.test.ts` — every untrusted input/response is handled
+  or typed-rejected, never an untyped throw (including garbage register receipts
+  and arbitrary `agent_id_onchain` strings).
 - `tests/integration/chain.integration.test.ts` and
   `tests/e2e/chain.e2e.test.ts` — real Mantle Sepolia, **gated on
   `MANTLE_TESTNET_RPC_URL`**:
