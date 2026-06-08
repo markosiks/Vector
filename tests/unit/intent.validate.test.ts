@@ -160,19 +160,38 @@ describe('validateIntent — ordered failures (first failing check decides)', ()
     expectFail(await mk({ max_slippage: '0.0000001' }), 'bounds', 'slippage_scale'); // 7 frac, in [0,1]
   });
 
-  test('(e) bounds: large magnitudes pass the gate — the firewall clips them, the gate does not reject', async () => {
+  test('(e) bounds: storable-but-large magnitudes pass the gate — the firewall clips them', async () => {
     const mk = async (over: Record<string, unknown>) => {
       const signed = await signIntent(validOpenInput({ ttl: ttlAfterNow, ...over }), TEST_PK);
       return validateIntent(signed, baseOpts());
     };
-    // An astronomically large size/leverage is the firewall's job to CLIP (§6.5),
-    // not the gate's to hard-reject; only the fractional scale is bounded here.
-    expect((await mk({ size: '9'.repeat(26) })).ok).toBe(true); // 26 integer digits
-    expect((await mk({ leverage: '1000000' })).ok).toBe(true); // 7 integer digits
-    // Values exactly at the storable scale are accepted.
+    // A large-but-storable size/leverage is the firewall's job to CLIP (§6.5),
+    // not the gate's to hard-reject. Values exactly at the column's integer +
+    // fractional budget are accepted: size numeric(38, 18) ⇒ 20 integer digits,
+    // leverage numeric(12, 6) ⇒ 6 integer digits.
+    expect((await mk({ size: '9'.repeat(20) })).ok).toBe(true); // 20 integer digits
     expect((await mk({ size: '9'.repeat(20) + '.' + '9'.repeat(18) })).ok).toBe(true);
+    expect((await mk({ leverage: '999999' })).ok).toBe(true); // 6 integer digits
     expect((await mk({ leverage: '999999.999999' })).ok).toBe(true); // numeric(12, 6)
     expect((await mk({ max_slippage: '0.999999' })).ok).toBe(true);
+  });
+
+  test('(e) bounds: a magnitude too large to store is rejected at the gate, not crashed on INSERT', async () => {
+    const mk = async (over: Record<string, unknown>) => {
+      const signed = await signIntent(validOpenInput({ ttl: ttlAfterNow, ...over }), TEST_PK);
+      return validateIntent(signed, baseOpts());
+    };
+    // The raw Intent is persisted BEFORE the firewall clips, so an integer part
+    // wider than the column (size/tp/sl numeric(38, 18) ⇒ 20; leverage
+    // numeric(12, 6) ⇒ 6) would abort the INSERT with Postgres 22003. The gate
+    // turns that uncaught crash into a clean, deterministic rejection.
+    expectFail(await mk({ size: '9'.repeat(21) }), 'bounds', 'size_magnitude'); // 21 integer digits
+    expectFail(await mk({ tp: '9'.repeat(21) }), 'bounds', 'tp_magnitude');
+    expectFail(await mk({ sl: '9'.repeat(21) }), 'bounds', 'sl_magnitude');
+    expectFail(await mk({ leverage: '1000000' }), 'bounds', 'leverage_magnitude'); // 7 integer digits
+    // Magnitude is checked before scale: an over-wide integer part with extra
+    // fraction digits reports the magnitude failure first.
+    expectFail(await mk({ size: '9'.repeat(21) + '.123456789012345678901' }), 'bounds', 'size_magnitude');
   });
 
   test('(e) before (f): a bad size beats a target_address violation', async () => {
