@@ -108,6 +108,42 @@ export const envSchema = z.object({
    * path needs it; validated as an http(s) URL if set.
    */
   PUBLIC_BASE_URL: httpUrl.optional(),
+  /**
+   * Byreal Perps CLI scoped session/agent key (P2.1). Secret. Optional: when
+   * absent the Byreal credibility rail is **disabled** and the demo runs purely
+   * on the deterministic seed rail (the default, byte-identical arc). When set,
+   * the {@link import('@/lib/rail/byreal').loadByrealCredentials} loader is the
+   * sole holder of this value — it is injected into the CLI subprocess via the
+   * `BYREAL_PERPS_AGENT_KEY` child env and never logged, returned to agents, or
+   * sent to the client.
+   */
+  BYREAL_PERPS_AGENT_KEY: secret.optional(),
+  /**
+   * Byreal Perps wallet address the scoped key authorizes (P2.1). Required
+   * together with `BYREAL_PERPS_AGENT_KEY` for the rail to enable; validated as
+   * a 0x-prefixed 20-byte EVM address if present. Non-secret (a public address),
+   * but only meaningful paired with the key.
+   */
+  BYREAL_PERPS_WALLET_ADDRESS: z
+    .string()
+    .trim()
+    .regex(/^0x[0-9a-fA-F]{40}$/, 'must be a 0x-prefixed 20-byte EVM address')
+    .optional(),
+  /**
+   * Network the Byreal rail is allowed to trade on (P2.1). Defaults to
+   * `testnet`. This is a *safety boundary*: the rail refuses to enable on
+   * `mainnet` unless this is explicitly set, so a misconfigured deployment can
+   * never place real-money orders by accident (the spec scopes P2.1 to a funded
+   * **testnet** account).
+   */
+  BYREAL_PERPS_NETWORK: z.enum(['testnet', 'mainnet']).optional(),
+  /**
+   * Absolute path to the Byreal CLI executable (its bundled `dist/index.cjs`),
+   * resolved against the installed `@byreal-io/byreal-perps-cli`. Optional: the
+   * adapter falls back to the package's `bin` resolution. Validated as a
+   * non-empty bounded string if present.
+   */
+  BYREAL_PERPS_CLI_PATH: z.string().trim().min(1).max(MAX_URL_LEN).optional(),
   /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
   GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
 });
