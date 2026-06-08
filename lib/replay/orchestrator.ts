@@ -10,6 +10,7 @@ import { listSeedOutcomesByAgentRound } from '@/lib/db/repos/outcomes';
 import type { AgentRow, OutcomeRow, PolicyEventRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
 import type { Context, Intent } from '@/lib/intent/types';
+import type { NansenSignalProvider } from '@/lib/signals/nansen';
 import { signIntent } from '@/lib/intent/sign';
 import { validateIntent, type ValidateOptions } from '@/lib/intent/validate';
 import { deriveRouterAgents, loadPrevAllocations, recordRoute } from '@/lib/router/record';
@@ -25,6 +26,7 @@ import { consumeAttackArm } from './control';
 import { planTicks, roundCount, tickInstantMs, type SchedulerTiming } from './scheduler';
 import { createSeedRail, settleWithFallback, type Rail } from './rail';
 import { ensureRound, setupArc, type ArcSetup } from './setup';
+import { nansenSignalsFor } from './signals';
 
 /**
  * The demo-spine orchestrator (architecture.txt §6.5).
@@ -119,6 +121,16 @@ export interface RunArcOptions {
   readonly validate?: Partial<ValidateOptions>;
   /** Setup owner string for created agents. */
   readonly owner?: string;
+  /**
+   * Optional **Nansen smart-money signal** (P2.2): a read-only provider whose
+   * cached snapshot is injected into the leader's `context.signals.nansen`
+   * (see {@link nansenSignalsFor}). It is polled once per tick via
+   * `maybeRefresh`, which never blocks the tick. Unset (the default) ⇒ every
+   * agent's `signals` is `{}` ⇒ the arc is byte-identical. Even when set, seed
+   * strategies ignore `context.signals`, so the produced Intents — and thus the
+   * deterministic arc — are unchanged; the signal is observability/seam only.
+   */
+  readonly nansen?: NansenSignalProvider;
   readonly hooks?: RunArcHooks;
 }
 
@@ -236,6 +248,7 @@ async function processAgentTick(
   validate: ValidateOptions,
   rail: Rail,
   credibilityRail: Rail | undefined,
+  nansen: NansenSignalProvider | undefined,
 ): Promise<void> {
   const agent = getSeedAgent(agentId);
   if (agent === undefined) return;
@@ -249,7 +262,7 @@ async function processAgentTick(
     allocation,
     remaining_budget: allocation,
     score: agentRow === undefined ? CONFIG.scoring.score_0 : Number(agentRow.score_current),
-    signals: {},
+    signals: nansenSignalsFor(agentId, nansen),
   };
 
   const unsigned = await composeIntent({
@@ -532,6 +545,10 @@ export async function runArc(
       round = await loadRoundContext(db, arc, tick.roundIndex);
     }
 
+    // Fire-and-forget: may start a detached Nansen refresh on its slow cadence.
+    // Never awaited — the tick must not block on the network (P2.2 invariant).
+    options.nansen?.maybeRefresh(tick.index);
+
     for (const agent of SEED_AGENTS) {
       const uuid = setup.agentsBySeedId.get(agent.id)?.id;
       if (uuid === undefined) continue;
@@ -548,6 +565,7 @@ export async function runArc(
         validate,
         rail,
         options.credibilityRail,
+        options.nansen,
       );
     }
 
