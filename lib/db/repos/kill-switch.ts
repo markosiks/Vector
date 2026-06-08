@@ -12,6 +12,31 @@ export function getKillSwitch(db: Queryable): Promise<KillSwitchRow | null> {
   return selectOne(db, 'SELECT * FROM kill_switch WHERE id = 1', [], killSwitchRow);
 }
 
+/** The kill switch as the live pipeline consumes it: a plain flag + reason. */
+export interface KillSwitchState {
+  readonly active: boolean;
+  readonly reason: string | null;
+}
+
+/**
+ * Read the kill switch for the live pipeline. Unlike {@link getKillSwitch} this
+ * fails **open**: a missing singleton row or a read error resolves to `inactive`
+ * rather than propagating. A transient read fault must never silently HALT every
+ * agent; trading through an outage is the operator's explicit choice for the demo
+ * spine. The failure is surfaced on `console.error` (name only — never the
+ * message, which could carry row data) so a broken switch is visible.
+ */
+export async function readKillSwitchState(db: Queryable): Promise<KillSwitchState> {
+  try {
+    const row = await getKillSwitch(db);
+    return { active: row?.active ?? false, reason: row?.reason ?? null };
+  } catch (err) {
+    const name = err instanceof Error ? err.name : 'Error';
+    console.error(`[killswitch] read failed; failing open (trading continues): ${name}`);
+    return { active: false, reason: null };
+  }
+}
+
 /** Set the kill switch state (operator action). Upserts the singleton row. */
 export async function setKillSwitch(
   db: Queryable,
