@@ -102,10 +102,15 @@ describeDb('nansen arc invariance (isolated schemas on real Neon)', () => {
     });
 
     // The deterministic outcome is identical despite the live, flapping signal.
+    // End-state is a *set* of per-agent allocations; the persisted read orders by
+    // `created_at`, which is not a total order (rows inserted in one routing pass
+    // can tie), so compare order-independently — same spirit as `crashedAgentIds`.
+    const byAgent = (r: RunArcResult) =>
+      [...r.finalAllocations].sort((a, b) => a.agentId.localeCompare(b.agentId));
     expect(withSignal.rounds).toBe(baseline.rounds);
     expect(withSignal.ticks).toBe(baseline.ticks);
     expect([...withSignal.crashedAgentIds].sort()).toEqual([...baseline.crashedAgentIds].sort());
-    expect(withSignal.finalAllocations).toEqual(baseline.finalAllocations);
+    expect(byAgent(withSignal)).toEqual(byAgent(baseline));
 
     // And the provider was actually exercised (polled) during the run.
     expect(events.some((e) => e.type === 'fetch_start')).toBe(true);
