@@ -88,6 +88,22 @@ export interface Keyset {
 }
 
 /**
+ * SQL expression yielding a **microsecond-precision**, lexicographically-sortable
+ * ISO-8601 UTC string for `created_at`, aliased `cursor_t`.
+ *
+ * The cursor key must come from this, NOT from the row's JS `Date`: the Neon
+ * driver truncates `timestamptz` to millisecond resolution when it builds a
+ * `Date`, and `Date.toISOString()` emits only 3 fractional digits. A cursor
+ * built that way (`…123Z` for a stored `…123456+00`) makes the seek predicate
+ * `created_at < $t` silently skip rows in the same millisecond whose
+ * microseconds fall below the truncated value — real row loss across a page
+ * boundary in the audit feeds. Selecting the key at full precision in SQL and
+ * binding it straight back as `::timestamptz` keeps the comparison exact.
+ */
+export const CURSOR_KEY_SQL =
+  `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_t`;
+
+/**
  * Append a keyset (seek) predicate for a feed ordered `created_at DESC, id DESC`
  * and return the SQL fragment, binding `before` into `params` as `$n`
  * parameters (never inlined). The fragment selects rows strictly *older* than
