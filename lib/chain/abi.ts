@@ -113,3 +113,72 @@ export const reputationRegistryAbi = [
     ],
   },
 ] as const;
+
+/**
+ * Typed ERC-8004 **Identity Registry** ABI — the subset Vector calls to register
+ * seed agents and to gate feedback authorization.
+ *
+ * Provenance note: unlike the Reputation Registry, the *published*
+ * `abis/IdentityRegistry.json` in `erc-8004/erc-8004-contracts` predates the
+ * deployed **v2** contract and is **missing `isAuthorizedOrOwner`** (the very
+ * function the live `ReputationRegistry.giveFeedback` self-feedback guard
+ * calls). Vendoring that stale JSON would be misleading, so this subset is
+ * authored directly from the v2 source (`contracts/IdentityRegistryUpgradeable.sol`,
+ * `getVersion() == "2.0.0"`) and is verified against the *live* contract by the
+ * gated integration suite (`tests/integration/chain.integration.test.ts`) —
+ * stronger provenance than a subset check against an out-of-date artifact.
+ *
+ * Only the calls Vector issues are included (register, ownerOf,
+ * isAuthorizedOrOwner, getAgentWallet, plus the `Registered` event used to
+ * decode the minted tokenId); the ERC-721 transfer/admin surface is omitted.
+ */
+export const identityRegistryAbi = [
+  {
+    type: 'function',
+    name: 'register',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'agentURI', type: 'string', internalType: 'string' }],
+    outputs: [{ name: 'agentId', type: 'uint256', internalType: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'ownerOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'isAuthorizedOrOwner',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'spender', type: 'address', internalType: 'address' },
+      { name: 'agentId', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'getAgentWallet',
+    stateMutability: 'view',
+    inputs: [{ name: 'agentId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'getVersion',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'string', internalType: 'string' }],
+  },
+  {
+    type: 'event',
+    name: 'Registered',
+    anonymous: false,
+    inputs: [
+      { name: 'agentId', type: 'uint256', internalType: 'uint256', indexed: true },
+      { name: 'agentURI', type: 'string', internalType: 'string', indexed: false },
+      { name: 'owner', type: 'address', internalType: 'address', indexed: true },
+    ],
+  },
+] as const;
