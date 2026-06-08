@@ -124,6 +124,19 @@ describe('buildSettlementCommand — rejects malformed numerics (defense in dept
   test('scientific notation is rejected (not canonical decimal)', () => {
     expect(() => buildSettlementCommand(intent({ size: '1e3' }))).toThrow(ByrealCommandError);
   });
+
+  test('a negative size is rejected (cannot land in a positional slot as a flag)', () => {
+    expect(() => buildSettlementCommand(intent({ size: '-1' }))).toThrow(ByrealCommandError);
+  });
+
+  test('a negative TP/SL is rejected', () => {
+    expect(() => buildSettlementCommand(intent({ tp: '-70000' }))).toThrow(ByrealCommandError);
+    expect(() => buildSettlementCommand(intent({ sl: '-60000' }))).toThrow(ByrealCommandError);
+  });
+
+  test('a zero size is rejected (no positive quantity to trade)', () => {
+    expect(() => buildSettlementCommand(intent({ size: '0' }))).toThrow(ByrealCommandError);
+  });
 });
 
 describe('read commands', () => {

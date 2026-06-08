@@ -14,10 +14,11 @@ import type { ByrealCredentials } from './credentials';
  *    the CLI's `#!/usr/bin/env node` shebang, so it runs identically under Node
  *    and Bun.
  *  - **Credential isolation.** The child receives a *minimal, explicit* env
- *    (`PATH`/`HOME` for the CLI's own config dir, plus the scoped key + wallet).
- *    The parent's environment — every other secret — is **not** inherited, so a
- *    bug in the CLI cannot exfiltrate unrelated secrets, and the scoped key
- *    lives only in the child env, never in argv, logs, or this module's output.
+ *    (`PATH`/`HOME` for the CLI's own config dir, the scoped key + wallet, and
+ *    the validated network). The parent's environment — every other secret — is
+ *    **not** inherited, so a bug in the CLI cannot exfiltrate unrelated secrets,
+ *    and the scoped key lives only in the child env, never in argv, logs, or
+ *    this module's output.
  *  - **Bounded.** A hard timeout kills a hung process (SIGTERM then SIGKILL) and
  *    a stdout cap kills a runaway one; both surface as a deterministic error the
  *    caller degrades to the seed fallback.
@@ -77,8 +78,15 @@ export function resolveCliPath(explicit?: string): string {
  * Build the minimal, secret-scoped child environment.
  *
  * Exported for the credential-isolation regression test: the child must receive
- * *only* `PATH`/`HOME` (for the CLI's own config dir) plus the scoped key and
- * wallet — never the parent's other secrets.
+ * *only* `PATH`/`HOME` (for the CLI's own config dir), the scoped key and wallet,
+ * and the validated network — never the parent's other secrets.
+ *
+ * `BYREAL_PERPS_NETWORK` is forwarded as defense-in-depth so the subprocess is
+ * pinned to the same network the adapter validated at construction. Note the CLI
+ * ultimately resolves its network from its stored account config (keyed by
+ * `HOME`), so this env var only hardens CLI versions that honour it; the
+ * load-bearing guard against real-money orders remains the construction-time
+ * refusal of `mainnet` credentials in {@link import('./adapter').createByrealRail}.
  */
 export function buildChildEnv(credentials: ByrealCredentials): Record<string, string> {
   return {
@@ -86,6 +94,7 @@ export function buildChildEnv(credentials: ByrealCredentials): Record<string, st
     HOME: process.env.HOME ?? '',
     BYREAL_PERPS_AGENT_KEY: credentials.agentKey,
     BYREAL_PERPS_WALLET_ADDRESS: credentials.walletAddress,
+    BYREAL_PERPS_NETWORK: credentials.network,
   };
 }
 
@@ -129,14 +138,20 @@ export function runByrealCli(
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (killTimer !== undefined) clearTimeout(killTimer);
+      // The SIGKILL escalation timer is intentionally NOT cleared here: settling
+      // the promise (e.g. rejecting on timeout) must not cancel the pending
+      // SIGKILL, or a process that ignores SIGTERM would never be force-killed
+      // and would leak as a zombie. It is cleared on `close`, once the process
+      // has actually exited.
       fn();
     };
 
     const timeout = setTimeout(() => {
       child.kill('SIGTERM');
-      // Escalate if the process ignores SIGTERM.
+      // Escalate if the process ignores SIGTERM. `unref` so this lone timer
+      // cannot, by itself, keep the event loop alive.
       killTimer = setTimeout(() => child.kill('SIGKILL'), 1_000);
+      killTimer.unref?.();
       finish(() => reject(new ByrealCliTimeout(options.timeoutMs)));
     }, options.timeoutMs);
 
@@ -156,6 +171,8 @@ export function runByrealCli(
       finish(() => reject(new ByrealCliSpawnError(err.message)));
     });
     child.on('close', (code) => {
+      // The process has exited; cancel any pending SIGKILL escalation.
+      if (killTimer !== undefined) clearTimeout(killTimer);
       finish(() => resolve({ stdout, stderr, code }));
     });
   });
