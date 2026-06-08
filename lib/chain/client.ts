@@ -133,6 +133,11 @@ export function getAttestorAddress(): Address {
 /** Lazily build the attestor account (used only by feedback writes, P1.8). */
 function getAttestorAccount(): Account {
   if (attestorAccount === undefined) {
+    // Fail closed before deriving the signer: a shared operator/attestor key
+    // makes every `giveFeedback` revert (the registry forbids self-feedback), so
+    // enforce the distinctness invariant here — the single entry point to
+    // attestor signing — rather than discovering it as a wasted on-chain revert.
+    assertDistinctSigners();
     attestorAccount = privateKeyToAccount(parseAttestorKey(ENV.ATTESTOR_PRIVATE_KEY));
   }
   return attestorAccount;

@@ -158,6 +158,24 @@ describe('submitAttestation', () => {
     expect(writer.calls).toHaveLength(0);
   });
 
+  test('fails closed for a value outside int128 range before any write', async () => {
+    // The `value` column (numeric(39,0)) is wider than the registry's int128
+    // argument; a value beyond int128 must be a typed error at the chain-write
+    // boundary, not a cryptic ABI throw or wasted gas.
+    const overInt128 = (1n << 127n).toString(); // INT128_MAX + 1
+    const row = optimisticRow({ value: overInt128 });
+    const db = new FakeAttestationDb([row]);
+    const writer = recordingWriter();
+
+    await expect(
+      submitAttestation(
+        { db, writer, reader: attestableReader(), attestor: ATTESTOR, baseUrl: BASE },
+        { attestationId: row.id, agentOnchainId: '7' },
+      ),
+    ).rejects.toBeInstanceOf(AttestationSubmitError);
+    expect(writer.calls).toHaveLength(0);
+  });
+
   test('a lost tx_hash race is reported as `raced`, not a silent double write', async () => {
     const row = optimisticRow();
     // A db whose submission-claim UPDATE always loses the race (returns no row),
