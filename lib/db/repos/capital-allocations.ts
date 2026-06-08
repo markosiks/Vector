@@ -48,7 +48,7 @@ export function listAllocationsByRound(
 ): Promise<CapitalAllocationRow[]> {
   return selectMany(
     db,
-    'SELECT * FROM capital_allocations WHERE round_id = $1 ORDER BY created_at ASC',
+    'SELECT * FROM capital_allocations WHERE round_id = $1 ORDER BY created_at ASC, id ASC',
     [roundId],
     capitalAllocationRow,
   );
