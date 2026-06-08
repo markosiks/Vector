@@ -176,17 +176,50 @@ export const chainSchema = z.object({
   identity_registry_address: evmAddress,
 });
 
-/** The full seeded-config schema. */
-export const configSchema = z.object({
-  scoring: scoringSchema,
-  router: routerSchema,
-  timing: timingSchema,
-  nansen: nansenSchema,
-  elfa: elfaSchema,
-  policy: policySchema,
-  capital: capitalSchema,
-  chain: chainSchema,
-});
+/**
+ * The full seeded-config schema.
+ *
+ * The cross-field refinement guards invariants that span domains and would
+ * otherwise fail *silently* — no per-field range check can catch them, yet a
+ * plausible config edit can break a core guarantee with no startup error:
+ *
+ *  - `scoring.crash_cap < router.s_min` — a floor-crashed agent is capped to
+ *    `crash_cap` and gated *this* round, but next round the router re-derives
+ *    eligibility purely from `score_current >= s_min`. The crashed agent stays
+ *    excluded next round *only because* `crash_cap < s_min`. Raise `crash_cap`
+ *    to or above `s_min` and a floor-crash silently stops gating — the whole
+ *    point of reputation collapse defeated.
+ *  - `scoring.score_0 < router.s_min` — a new agent's starting prior must sit
+ *    below the eligibility floor so "trust is earned, never granted": at or
+ *    above `s_min`, a brand-new agent is funded on arrival.
+ */
+export const configSchema = z
+  .object({
+    scoring: scoringSchema,
+    router: routerSchema,
+    timing: timingSchema,
+    nansen: nansenSchema,
+    elfa: elfaSchema,
+    policy: policySchema,
+    capital: capitalSchema,
+    chain: chainSchema,
+  })
+  .superRefine((cfg, ctx) => {
+    if (cfg.scoring.crash_cap >= cfg.router.s_min) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['scoring', 'crash_cap'],
+        message: `crash_cap (${cfg.scoring.crash_cap}) must be < router.s_min (${cfg.router.s_min}) so a floor-crashed agent stays gated next round`,
+      });
+    }
+    if (cfg.scoring.score_0 >= cfg.router.s_min) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['scoring', 'score_0'],
+        message: `score_0 (${cfg.scoring.score_0}) must be < router.s_min (${cfg.router.s_min}) so a new agent is not funded before trust is earned`,
+      });
+    }
+  });
 
 /** The validated, structurally-typed shape of the seeded config. */
 export type VectorConfig = z.infer<typeof configSchema>;
