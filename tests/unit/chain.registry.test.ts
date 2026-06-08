@@ -88,14 +88,18 @@ describe('getIdentityRegistry / getVersion output validation', () => {
 });
 
 describe('input validation before the RPC', () => {
-  const r = reader({ reads: { getLastIndex: 0n, getSummary: [0n, 0n, 0], readFeedback: [0n, 0, '', '', false] } });
+  const r = reader({
+    reads: { getLastIndex: 0n, getSummary: [0n, 0n, 0], readFeedback: [0n, 0, '', '', false] },
+  });
 
   test('rejects a negative agentId', async () => {
     await expect(getLastIndex(r, -1, ID)).rejects.toBeInstanceOf(RegistryError);
   });
 
   test('rejects an agentId above uint256', async () => {
-    await expect(getLastIndex(r, (1n << 256n).toString(), ID)).rejects.toBeInstanceOf(RegistryError);
+    await expect(getLastIndex(r, (1n << 256n).toString(), ID)).rejects.toBeInstanceOf(
+      RegistryError,
+    );
   });
 
   test('rejects a malformed client address', async () => {
@@ -120,7 +124,11 @@ describe('input validation before the RPC', () => {
 describe('output shape validation', () => {
   test('getAgentSummary decodes a well-formed tuple', async () => {
     const r = reader({ reads: { getSummary: [3n, -1500n, 2] } });
-    expect(await getAgentSummary(r, 1, [ID])).toEqual({ count: 3n, value: -1500n, valueDecimals: 2 });
+    expect(await getAgentSummary(r, 1, [ID])).toEqual({
+      count: 3n,
+      value: -1500n,
+      valueDecimals: 2,
+    });
   });
 
   test('getAgentSummary rejects an empty clients set before the RPC (no "all" sentinel)', async () => {

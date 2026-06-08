@@ -15,7 +15,7 @@ const UINT256_MAX = (1n << 256n) - 1n;
 /** Deterministic small PRNG so failures reproduce. */
 function lcg(seed: number): () => number {
   let s = seed >>> 0;
-  return () => ((s = (1664525 * s + 1013904223) >>> 0) / 0x100000000);
+  return () => (s = (1664525 * s + 1013904223) >>> 0) / 0x100000000;
 }
 
 function randomHex(rng: () => number, bytes: number): Hex {

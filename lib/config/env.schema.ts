@@ -79,6 +79,13 @@ export const envSchema = z.object({
    * distinctness invariant is enforced at the client (`assertDistinctSigners`).
    */
   ATTESTOR_PRIVATE_KEY: secret.optional(),
+  /**
+   * Absolute public base URL this deployment serves from, e.g.
+   * `https://vector.app`. Used to build the on-chain `feedbackURI` for the
+   * off-chain attestation detail (P1.8). Non-secret. Optional until the write
+   * path needs it; validated as an http(s) URL if set.
+   */
+  PUBLIC_BASE_URL: rpcUrl.optional(),
   /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
   GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
 });

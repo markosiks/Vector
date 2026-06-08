@@ -172,6 +172,8 @@ export const attestationRow = z.object({
   tag2: z.string().nullable(),
   feedback_uri: z.string().nullable(),
   feedback_hash: hex32.nullable(),
+  /** Canonical off-chain detail JSON served at `feedback_uri`; `null` until built. */
+  feedback_detail: z.string().nullable(),
   chain_state: z.enum(CHAIN_STATE),
   tx_hash: hex32.nullable(),
   block_number: z.string().nullable(),

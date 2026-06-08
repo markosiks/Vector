@@ -191,7 +191,11 @@ describe('validateIntent — ordered failures (first failing check decides)', ()
     expectFail(await mk({ leverage: '1000000' }), 'bounds', 'leverage_magnitude'); // 7 integer digits
     // Magnitude is checked before scale: an over-wide integer part with extra
     // fraction digits reports the magnitude failure first.
-    expectFail(await mk({ size: '9'.repeat(21) + '.123456789012345678901' }), 'bounds', 'size_magnitude');
+    expectFail(
+      await mk({ size: '9'.repeat(21) + '.123456789012345678901' }),
+      'bounds',
+      'size_magnitude',
+    );
   });
 
   test('(e) before (f): a bad size beats a target_address violation', async () => {

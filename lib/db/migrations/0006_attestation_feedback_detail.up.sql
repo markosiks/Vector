@@ -1,0 +1,11 @@
+-- ---------------------------------------------------------------------------
+-- 0006 — attestation off-chain detail payload (P1.8)
+--
+-- The attestation pipeline serves an off-chain feedback *detail* document at
+-- `feedback_uri`, integrity-anchored on-chain by `feedback_hash`. Storing the
+-- exact canonical JSON bytes here (rather than recomputing them on read) makes
+-- the served payload provably re-hash to `feedback_hash` with no build-vs-serve
+-- drift. Nullable: an optimistic mirror may exist before its detail is built,
+-- and rows predating P1.8 have none.
+-- ---------------------------------------------------------------------------
+ALTER TABLE attestations ADD COLUMN feedback_detail text;
