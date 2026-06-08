@@ -23,8 +23,6 @@ describeChain('P1.7 DoD — registry readable from the app', () => {
   test('production read path resolves the registry, identity, version and an agent client list', async () => {
     const { getReputationReader } = await import('@/lib/chain/client');
     const { smokeRead, getClients } = await import('@/lib/chain/registry');
-    const { onchainAgentId } = await import('@/lib/chain/agent-id');
-    const { SEED_LEADER_ID } = await import('@/lib/agents/seed');
 
     const reader = getReputationReader();
     const address = CONFIG.chain.reputation_registry_address as `0x${string}`;
@@ -35,11 +33,12 @@ describeChain('P1.7 DoD — registry readable from the app', () => {
       CONFIG.chain.identity_registry_address.toLowerCase(),
     );
 
-    // `getClients` for an operator-assigned agentId must succeed structurally
-    // even with no feedback yet (empty list), proving the read path end to end.
-    // (Unlike `getSummary`, it has no non-empty-clients precondition.)
-    const agentId = onchainAgentId(SEED_LEADER_ID)!;
-    const clients = await getClients(reader, agentId);
+    // `getClients` must succeed structurally, proving the read path end to end.
+    // A fixed canonical tokenId (1) is used purely as a liveness probe — it is a
+    // pre-existing registered agent on the shared testnet registry, NOT one of
+    // Vector's (whose ids are null until P1.8 registration). Vector never writes
+    // against it; this only exercises the read wrapper against a real agentId.
+    const clients = await getClients(reader, 1n);
     expect(Array.isArray(clients)).toBe(true);
   });
 });
