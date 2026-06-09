@@ -1,0 +1,272 @@
+/*
+ * Operator console styling — the same dark, high-contrast palette as the Arena
+ * screen, tuned for a focused control surface rather than a projector. Danger
+ * actions (HALT, attack) are unambiguously red; resume/active states are green.
+ * All controls stay legible and large enough to hit under pressure.
+ */
+
+.screen,
+.loginScreen {
+  --bg: #0a0e17;
+  --panel: #121826;
+  --edge: #1f2a3d;
+  --text: #e8eef9;
+  --muted: #8a98b3;
+  --ok: #36d399;
+  --danger: #ff4d4f;
+  --danger-deep: #7a1d1f;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1rem, 3vw, 2.5rem);
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.35rem 0;
+}
+
+.banner {
+  background: var(--danger-deep);
+  color: #ffe8e8;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.1rem;
+}
+
+.panelHalted {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger) inset;
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.statusActive {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.statusHalted {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.reasonInput,
+.tokenInput {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+  background: #0d1320;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.reasonInput:disabled {
+  opacity: 0.4;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.haltBtn,
+.attackBtn {
+  background: var(--danger);
+  color: #fff;
+}
+
+.resumeBtn {
+  background: var(--ok);
+  color: #07210f;
+}
+
+.primaryBtn {
+  background: #2b6cff;
+  color: #fff;
+  width: 100%;
+  padding: 0.7rem;
+  margin-top: 0.5rem;
+}
+
+.linkBtn {
+  background: transparent;
+  border: 1px solid var(--edge);
+  color: var(--muted);
+}
+
+.attackBtn {
+  margin-top: 0.5rem;
+}
+
+.attackResult {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.attackResult code,
+.auditDetail code {
+  color: #ffd166;
+}
+
+/* Agents */
+.agentList,
+.auditList {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.agentRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--edge);
+}
+
+.agentName {
+  font-weight: 600;
+}
+
+.badge,
+.badgeHalted {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge {
+  background: #16321f;
+  color: var(--ok);
+}
+
+.badgeHalted {
+  background: var(--danger-deep);
+  color: #ffd0d0;
+}
+
+/* Audit */
+.auditRow {
+  display: grid;
+  grid-template-columns: 6rem 1fr auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--edge);
+  font-size: 0.85rem;
+}
+
+.auditKind {
+  color: #8ab4ff;
+  font-weight: 600;
+}
+
+.auditDetail {
+  color: var(--muted);
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.auditTime {
+  color: var(--muted);
+}
+
+/* Login */
+.loginScreen {
+  display: grid;
+  place-items: center;
+}
+
+.loginCard {
+  width: min(26rem, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  padding: 1.75rem;
+}
+
+.loginTitle {
+  margin: 0 0 0.5rem;
+}
+
+.loginHint {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.loginError {
+  color: var(--danger);
+  margin-top: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
