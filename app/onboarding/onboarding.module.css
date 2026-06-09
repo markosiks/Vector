@@ -1,0 +1,233 @@
+/*
+ * Onboarding doc styling (P3.3). A long-form, readable document surface — the
+ * "Make your agent Vector-compatible" page external teams land on. Tuned for
+ * legibility (constrained measure, generous line-height) rather than the
+ * projector scale of the arena. No motion, so nothing to gate on
+ * prefers-reduced-motion; layout is fluid across viewports via clamp().
+ */
+
+.page {
+  --bg: #0a0e17;
+  --panel: #121826;
+  --edge: #1f2a3d;
+  --text: #e8eef9;
+  --muted: #8a98b3;
+  --accent: #2b6cff;
+  --accent-soft: #21407a;
+  --good: #36d399;
+  --warn: #ffb020;
+  --danger: #ff4d4f;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1.25rem, 4vw, 4rem) clamp(1rem, 4vw, 2rem);
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.doc {
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.header {
+  border-bottom: 1px solid var(--edge);
+  padding-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.kicker {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.lede {
+  margin: 0;
+  font-size: clamp(1rem, 2vw, 1.18rem);
+  color: var(--text);
+  max-width: 44rem;
+}
+
+.section {
+  margin: 0 0 2.75rem;
+}
+
+.h2 {
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  font-weight: 650;
+  margin: 0 0 0.85rem;
+  color: var(--text);
+}
+
+.section p {
+  margin: 0 0 1rem;
+  color: var(--text);
+}
+
+.note {
+  color: var(--muted);
+}
+
+.list {
+  margin: 0 0 1rem;
+  padding-left: 1.4rem;
+}
+
+.list li {
+  margin: 0.3rem 0;
+}
+
+.doc code {
+  font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+  font-size: 0.88em;
+}
+
+.section :not(pre) > code {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 0.05em 0.4em;
+  color: #cfe0ff;
+}
+
+.code {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin: 0 0 1rem;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.code code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #cfe0ff;
+  white-space: pre;
+}
+
+.scroll {
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.pill {
+  display: inline-block;
+  margin: 0 0.25rem;
+}
+
+.kv {
+  margin: 0;
+}
+
+.kv > div {
+  margin: 0.5rem 0;
+}
+
+.kv dt {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0.15rem 0 0;
+}
+
+.break {
+  word-break: break-all;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  margin: 0 0 1rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  min-width: 40rem;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--edge);
+}
+
+.table th {
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.74rem;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.codeInline {
+  display: inline-block;
+  margin: 0 0.2rem 0.2rem 0;
+}
+
+.boundary {
+  border-left: 3px solid var(--warn);
+  background: rgba(255, 176, 32, 0.07);
+  padding: 0.85rem 1.1rem;
+  border-radius: 0 8px 8px 0;
+  color: var(--text);
+}
+
+.cta {
+  display: inline-block;
+  color: var(--bg);
+  background: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.6rem 1.1rem;
+  border-radius: 8px;
+}
+
+.cta:hover {
+  background: #4a82ff;
+}
+
+.roadmap {
+  border-left: 3px solid var(--accent-soft);
+  background: rgba(43, 108, 255, 0.07);
+  padding: 0.85rem 1.1rem;
+  border-radius: 0 8px 8px 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
