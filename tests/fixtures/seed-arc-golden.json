@@ -3,7 +3,7 @@
   "baseTimeMs": 1767225600000,
   "ttlHorizonMs": 10000,
   "totalTicks": 10,
-  "agentIds": ["seed-leader", "seed-2"],
+  "agentIds": ["seed-leader", "seed-2", "seed-3", "seed-4"],
   "ticks": [
     {
       "index": 0,
@@ -257,6 +257,170 @@
         "pnl_marked": "0",
         "capital_at_risk": "6000",
         "fees": "6",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      }
+    ],
+    "seed-3": [
+      {
+        "pnl_realized": "20",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "25",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "30",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "35",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "40",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "45",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "50",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "55",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "60",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "65",
+        "pnl_marked": "0",
+        "capital_at_risk": "50",
+        "fees": "1",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      }
+    ],
+    "seed-4": [
+      {
+        "pnl_realized": "-200",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-250",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-300",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-350",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-400",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-450",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-500",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-550",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-600",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
+        "position_delta": "1",
+        "drawdown": "0.020"
+      },
+      {
+        "pnl_realized": "-650",
+        "pnl_marked": "0",
+        "capital_at_risk": "1500",
+        "fees": "2",
         "position_delta": "1",
         "drawdown": "0.020"
       }

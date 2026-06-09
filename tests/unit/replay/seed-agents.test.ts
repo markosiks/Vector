@@ -70,11 +70,18 @@ describe('createTradeStrategy', () => {
 
 describe('seed roster', () => {
   test('every agent signs with the key that derives its address', () => {
-    expect(SEED_AGENTS).toHaveLength(2);
+    expect(SEED_AGENTS).toHaveLength(4);
     for (const agent of SEED_AGENTS) {
       expect(privateKeyToAccount(agent.privateKey).address).toBe(agent.signer);
       expect(agent.displayName).toBe(agent.id);
     }
+  });
+
+  test('roster ids are unique and stay in their canonical append order', () => {
+    expect(SEED_AGENTS.map((a) => a.id)).toEqual(['seed-leader', 'seed-2', 'seed-3', 'seed-4']);
+    expect(new Set(SEED_AGENTS.map((a) => a.id)).size).toBe(SEED_AGENTS.length);
+    // Distinct signing keys ⇒ distinct signer addresses (no key reuse).
+    expect(new Set(SEED_AGENTS.map((a) => a.signer)).size).toBe(SEED_AGENTS.length);
   });
 
   test('resolveSeedSigner resolves known agents and rejects unknown ones', () => {

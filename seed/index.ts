@@ -123,13 +123,56 @@ function seedOutcomeAt(carBase: number, pnlBase: number, index: number): SeedOut
   };
 }
 
-/** Per-agent fill profile, keyed by stable agent id. */
+/**
+ * Per-agent fill profile, keyed by stable agent id.
+ *
+ * `carBase` (capital-at-risk per tick) and `pnlBase` (PnL per tick) are the two
+ * knobs that place an agent on the leaderboard. The two ineligible personalities
+ * (`seed-3`/`seed-4`) are tuned so their EWMA AgentScore stays strictly below the
+ * router's `s_min` (30) for the entire arc — by *different* mechanisms, which is
+ * what makes them distinguishable while keeping the leader→runner-up drain
+ * reroute byte-identical (an ineligible agent never receives pool capital):
+ *
+ *  - `seed-3` (featherweight): profitable (`perf → 1`) but a tiny `carBase`, so
+ *    the anti-Sybil weight `w_r = car/(car+c_floor)` caps its score near 25.
+ *  - `seed-4` (contrarian): a loss (`pnlBase < 0`), so `perf → 0` and the score
+ *    decays toward the floor.
+ *
+ * The eligibility invariant is asserted in
+ * `tests/unit/replay/seed-agents-eligibility.test.ts`; changing these constants
+ * without re-checking it can silently break the drain demo.
+ */
 const FILL_PROFILE: Readonly<Record<string, { carBase: number; pnlBase: number }>> = {
   // Leader: most capital-at-risk *and* the best return on it, so it leads on
   // both axes the score rewards (return-on-CaR and the anti-Sybil capital weight).
   'seed-leader': { carBase: 32_000, pnlBase: 1_200 },
   'seed-2': { carBase: 6_000, pnlBase: 120 },
+  // Featherweight: real profit on negligible capital ⇒ high perf, low weight.
+  'seed-3': { carBase: 50, pnlBase: 20 },
+  // Contrarian: a steady loss ⇒ perf collapses, score decays to the floor.
+  'seed-4': { carBase: 1_500, pnlBase: -200 },
 };
+
+/**
+ * Drain-safety invariant, enforced at module load: every roster agent must have
+ * an **explicit** fill profile.
+ *
+ * The roster (`SEED_AGENTS`) and `FILL_PROFILE` are two append-only lists that
+ * must stay in sync. A missing entry is a programming error — and a dangerous
+ * one: it would otherwise fall back to a generic, *router-eligible* default
+ * (`w = car/(car+c_floor) = 0.5`, `perf → 1` ⇒ score ≈ 50 > `s_min`), silently
+ * adding an unintended capital-bearing agent and splitting the leader→runner-up
+ * drain reroute. We fail loudly here so the mistake surfaces the moment the
+ * module is imported (in any test or at startup) rather than as a corrupted arc.
+ */
+for (const agent of SEED_AGENTS) {
+  if (!Object.prototype.hasOwnProperty.call(FILL_PROFILE, agent.id)) {
+    throw new Error(
+      `seed: SEED_AGENTS member "${agent.id}" has no FILL_PROFILE entry; ` +
+        'every roster agent must declare an explicit fill profile (drain-safety invariant).',
+    );
+  }
+}
 
 /**
  * Build the frozen demo arc. Pure and deterministic: a fixed seed
@@ -160,7 +203,12 @@ export function buildDemoArc(options: BuildDemoArcOptions = {}): DemoArc {
 
   const outcomes: Record<string, SeedOutcome[]> = {};
   for (const agent of SEED_AGENTS) {
-    const profile = FILL_PROFILE[agent.id] ?? { carBase: 1_000, pnlBase: 10 };
+    // Totality is guaranteed by the module-load invariant above; this throw
+    // keeps the lookup type-total (no silent, router-eligible default profile).
+    const profile = FILL_PROFILE[agent.id];
+    if (profile === undefined) {
+      throw new Error(`seed: no FILL_PROFILE entry for roster agent "${agent.id}"`);
+    }
     outcomes[agent.id] = Array.from({ length: totalTicks }, (_, index) =>
       seedOutcomeAt(profile.carBase, profile.pnlBase, index),
     );
