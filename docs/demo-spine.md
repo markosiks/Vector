@@ -21,12 +21,18 @@ Code lives in `lib/replay/` (the orchestrator and its pure helpers), `lib/agents
 
 ## What it demonstrates
 
-A ~90-second arc (9 rounds × `ticks_per_round` ticks at `tick_rate_ms`) with two
-seed agents:
+A ~90-second arc (9 rounds × `ticks_per_round` ticks at `tick_rate_ms`) with the
+seed roster (full reference: [`docs/seed-agents.md`](./seed-agents.md)):
 
 - **`seed-leader`** — most capital-at-risk *and* the best return on it, so it leads
   on both axes the score rewards and holds the majority of the capital pool.
 - **`seed-2`** — a smaller, steady runner-up.
+- **`seed-3`** / **`seed-4`** — two extra, distinguishable personalities
+  (a profitable-but-featherweight agent and a loss-making contrarian) added in
+  P3.2. Both are deterministically kept **below `s_min`**, so they are *never*
+  eligible for capital and cannot perturb the leader→runner-up reroute below —
+  they exist to populate the leaderboard and showcase the merit layer denying
+  capital to a Sybil-weight winner and to an underperformer.
 
 On the **penultimate round's settle tick** an operator injects a fund-draining
 `transfer` to a fresh wallet from the leader. The pipeline reacts on its own:

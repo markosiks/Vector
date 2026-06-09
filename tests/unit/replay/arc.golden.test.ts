@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import { CONFIG } from '@/lib/config/constants';
-import { SEED_LEADER_ID, SEED_RUNNER_UP_ID } from '@/lib/agents/seed';
+import {
+  SEED_CONTRARIAN_ID,
+  SEED_FEATHERWEIGHT_ID,
+  SEED_LEADER_ID,
+  SEED_RUNNER_UP_ID,
+} from '@/lib/agents/seed';
 import { buildDemoArc, DEMO_ARC, DEMO_ROUNDS } from '@/seed';
 
 import golden from '@/tests/fixtures/seed-arc-golden.json';
@@ -30,7 +35,12 @@ describe('DEMO_ARC — default arc invariants', () => {
 
   test('spans DEMO_ROUNDS rounds of ticks_per_round ticks', () => {
     expect(DEMO_ARC.totalTicks).toBe(DEMO_ROUNDS * tpr);
-    expect(DEMO_ARC.agentIds).toEqual([SEED_LEADER_ID, SEED_RUNNER_UP_ID]);
+    expect(DEMO_ARC.agentIds).toEqual([
+      SEED_LEADER_ID,
+      SEED_RUNNER_UP_ID,
+      SEED_FEATHERWEIGHT_ID,
+      SEED_CONTRARIAN_ID,
+    ]);
     for (const id of DEMO_ARC.agentIds) {
       expect(DEMO_ARC.outcomes[id]).toHaveLength(DEMO_ARC.totalTicks);
     }
