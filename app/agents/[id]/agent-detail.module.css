@@ -1,0 +1,404 @@
+/*
+ * Agent-detail styling (P2.3). Shares the Attestation Log / Arena dark palette.
+ * Score state and decision verdicts are carried by colour *and* text, and every
+ * tone clears WCAG AA on the panel background.
+ */
+
+.screen {
+  --bg: #0a0e17;
+  --panel: #121826;
+  --panel-2: #0f1522;
+  --edge: #1f2a3d;
+  --text: #e8eef9;
+  --muted: #8a98b3;
+  --link: #6aa8ff;
+  --pos: #36d399;
+  --neg: #ff5a5f;
+  --warn: #f5c451;
+  --crit: #ff3b6b;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1rem, 3vw, 3rem);
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1rem, 2.4vw, 2rem);
+}
+
+.banner {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--neg) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--neg) 40%, transparent);
+  font-weight: 600;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.6rem, 3.2vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.headMeta {
+  margin: 0.5rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: clamp(0.85rem, 1.3vw, 1rem);
+}
+
+.dot {
+  color: var(--edge);
+}
+
+.statusPill {
+  padding: 0.15em 0.7em;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-size: 0.82em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status_active {
+  color: var(--pos);
+  border-color: color-mix(in srgb, var(--pos) 45%, transparent);
+}
+
+.status_halted,
+.status_retired {
+  color: var(--neg);
+  border-color: color-mix(in srgb, var(--neg) 45%, transparent);
+}
+
+.scoreNow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.scoreValue {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.section {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  padding: clamp(1rem, 2vw, 1.6rem);
+}
+
+.sectionTitle {
+  margin: 0 0 1rem;
+  font-size: clamp(0.95rem, 1.5vw, 1.15rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: clamp(1rem, 2.4vw, 2rem);
+}
+
+.mono {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.pos {
+  color: var(--pos);
+}
+
+.neg {
+  color: var(--neg);
+}
+
+.unit {
+  color: var(--muted);
+  font-size: 0.82em;
+}
+
+/* --- EWMA chart --- */
+.chart {
+  margin: 0;
+}
+
+.chartSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.gridLine {
+  stroke: var(--edge);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.chartArea {
+  fill: color-mix(in srgb, var(--link) 16%, transparent);
+}
+
+.chartCurve {
+  stroke: var(--link);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chartMarker {
+  fill: var(--text);
+  stroke: var(--link);
+  stroke-width: 2;
+}
+
+.chartCaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: clamp(0.8rem, 1.2vw, 0.95rem);
+  flex-wrap: wrap;
+}
+
+.chartEmpty,
+.panelEmpty {
+  padding: 1.4rem 0;
+  color: var(--muted);
+}
+
+/* --- Score breakdown --- */
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.formula {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+  font-size: clamp(0.95rem, 1.6vw, 1.2rem);
+  color: var(--muted);
+}
+
+.formula em {
+  color: var(--text);
+  font-style: italic;
+}
+
+.terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.term {
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+}
+
+.term dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.term dd {
+  margin: 0.4rem 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5ch;
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  font-weight: 700;
+}
+
+.op {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.result {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--edge);
+}
+
+.rawValue {
+  font-size: clamp(1.4rem, 2.6vw, 2rem);
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+}
+
+.clampNote {
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* --- Intents --- */
+.intents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.intentRow {
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 0.7rem 1rem;
+}
+
+.intentMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.intentDesc {
+  font-weight: 600;
+}
+
+.intentMeta {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.4rem 1.1rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+}
+
+.decision {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  padding: 0.22em 0.7em;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.sev {
+  font-size: 0.78em;
+  font-weight: 600;
+  opacity: 0.85;
+  text-transform: uppercase;
+}
+
+.decOk {
+  color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 14%, transparent);
+  border-color: color-mix(in srgb, var(--pos) 40%, transparent);
+}
+
+.decWarn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.decDanger {
+  color: var(--neg);
+  background: color-mix(in srgb, var(--neg) 14%, transparent);
+  border-color: color-mix(in srgb, var(--neg) 40%, transparent);
+}
+
+.decCritical {
+  color: #fff;
+  background: var(--crit);
+  border-color: var(--crit);
+}
+
+.decNone {
+  color: var(--muted);
+  border-color: var(--edge);
+}
+
+/* --- Outcomes table --- */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: clamp(0.82rem, 1.3vw, 0.95rem);
+  min-width: 36rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.5rem 0.8rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--edge);
+}
+
+.table td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--edge) 60%, transparent);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.state {
+  padding: 3rem 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+}
+
+.error {
+  color: var(--neg);
+}
