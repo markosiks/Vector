@@ -117,8 +117,8 @@ export const nansenSchema = z.object({
 export const elfaSchema = z.object({
   /** `real` hits the live API; `mock` replays a fixture. */
   mode: z.enum(['real', 'mock']),
-  /** Elfa API base URL (non-secret). */
-  endpoint: httpUrl,
+  /** Elfa API base URL. `https`-only: the API key rides in a request header. */
+  endpoint: httpsUrl,
   /** Cache TTL for the Elfa signal in milliseconds. */
   cache_ttl_ms: positiveInt,
   /** Fetch the Elfa signal once per this many ticks. */
