@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import { setAgentStatus } from '@/lib/db/repos/agents';
+import { getIntentByAgentNonce } from '@/lib/db/repos/intents';
 import { insertOperatorAction, listRecentOperatorActions } from '@/lib/db/repos/operator-actions';
+import { getPolicyEventByIntent } from '@/lib/db/repos/policy-events';
 import type { Queryable } from '@/lib/db/types';
 
 /** A fake that records calls and returns a pre-seeded row set. */
@@ -76,5 +78,31 @@ describe('listRecentOperatorActions', () => {
       'SELECT * FROM operator_actions ORDER BY created_at DESC, id DESC LIMIT $1',
     );
     expect(db.last?.params).toEqual([25]);
+  });
+});
+
+describe('getIntentByAgentNonce', () => {
+  test('reads the reserved row by (agent_id, nonce) and binds both', async () => {
+    const db = new FakeDb([]);
+    const row = await getIntentByAgentNonce(
+      db,
+      '11111111-1111-1111-1111-111111111111',
+      'op-attack:abc',
+    );
+    expect(db.last?.sql).toBe('SELECT * FROM intents WHERE agent_id = $1 AND nonce = $2');
+    expect(db.last?.params).toEqual(['11111111-1111-1111-1111-111111111111', 'op-attack:abc']);
+    expect(row).toBeNull(); // empty set → null (the idempotency read-back missed)
+  });
+});
+
+describe('getPolicyEventByIntent', () => {
+  test('reads the newest event for an intent_id and binds it', async () => {
+    const db = new FakeDb([]);
+    const row = await getPolicyEventByIntent(db, '33333333-3333-3333-3333-333333333333');
+    expect(db.last?.sql).toBe(
+      'SELECT * FROM policy_events WHERE intent_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1',
+    );
+    expect(db.last?.params).toEqual(['33333333-3333-3333-3333-333333333333']);
+    expect(row).toBeNull();
   });
 });
