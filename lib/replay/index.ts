@@ -32,4 +32,4 @@ export {
   type RunArcOptions,
   type RunArcResult,
 } from './orchestrator';
-export { nansenSignalsFor } from './signals';
+export { nansenSignalsFor, elfaSignalsFor, signalsFor } from './signals';
