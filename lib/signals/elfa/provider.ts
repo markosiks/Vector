@@ -56,6 +56,19 @@ interface CacheEntry {
  * Construct an {@link ElfaSignalProvider}. The provider owns its own cache,
  * cadence, and in-flight state; it is safe to share one instance across the arc.
  */
+/**
+ * Total error-name extractor for the detached fail-open path. Reading `.name`
+ * off an exotic thrown value (e.g. a Proxy with a throwing getter) could itself
+ * throw; this swallows that so the detached `runFetch` can never reject.
+ */
+function errorName(err: unknown): string {
+  try {
+    return err instanceof Error ? err.name : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function createElfaSignalProvider(deps: ElfaProviderDeps): ElfaSignalProvider {
   const now = deps.now ?? Date.now;
   const endpointLabel = 'aggregations/trending-tokens';
@@ -114,11 +127,13 @@ export function createElfaSignalProvider(deps: ElfaProviderDeps): ElfaSignalProv
       });
     } catch (err) {
       // Fail-open: keep the last good value (live or mock); surface a redacted reason.
+      // `errorName` is total — this catch must never throw (the fetch is detached,
+      // so a throw here would become an unhandled rejection).
       log({
         type: 'fetch_error',
         endpoint: endpointLabel,
         calls,
-        reason: err instanceof Error ? err.name : 'unknown',
+        reason: errorName(err),
       });
     }
   }

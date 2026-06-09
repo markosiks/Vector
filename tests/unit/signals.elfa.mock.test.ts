@@ -41,4 +41,17 @@ describe('elfa mock — determinism & shape', () => {
     expect(a).not.toBe(b);
     expect(a.sentiments).not.toBe(b.sentiments);
   });
+
+  test('is deeply frozen: the snapshot, the sentiments array, and each row are immutable', () => {
+    const m = buildElfaMock();
+    expect(Object.isFrozen(m)).toBe(true);
+    expect(Object.isFrozen(m.sentiments)).toBe(true);
+    for (const s of m.sentiments) expect(Object.isFrozen(s)).toBe(true);
+    // A runtime mutation that bypasses the readonly type must not corrupt the
+    // shared snapshot (the provider returns this same reference forever).
+    expect(() => {
+      (m.sentiments as unknown as Array<unknown>).push({ symbol: 'EVIL', sentiment: '999' });
+    }).toThrow();
+    expect(m.sentiments.length).toBe(buildElfaMock().sentiments.length);
+  });
 });

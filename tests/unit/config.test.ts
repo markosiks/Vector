@@ -61,10 +61,24 @@ describe('seeded config — completeness & types', () => {
     expect(Number.isInteger(CONFIG.router.cooldown_ticks)).toBe(true);
   });
 
-  test('signal endpoints are absolute http(s) URLs', () => {
-    expect(CONFIG.nansen.endpoint).toMatch(/^https?:\/\//);
-    expect(CONFIG.elfa.endpoint).toMatch(/^https?:\/\//);
+  test('credentialed signal endpoints are https-only; others are absolute http(s) URLs', () => {
+    // Nansen and Elfa carry an API key in a request header, so the schema must
+    // pin them to https — the credential can never transit in cleartext.
+    expect(CONFIG.nansen.endpoint).toMatch(/^https:\/\//);
+    expect(CONFIG.elfa.endpoint).toMatch(/^https:\/\//);
     expect(CONFIG.chain.mantle_explorer_base_url).toMatch(/^https?:\/\//);
+  });
+
+  test('schema rejects an http:// Elfa endpoint (API key must never transit in cleartext)', () => {
+    const candidate = {
+      ...CONFIG,
+      elfa: { ...CONFIG.elfa, endpoint: 'http://api.elfa.ai' },
+    };
+    const result = configSchema.safeParse(candidate);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.join('.') === 'elfa.endpoint')).toBe(true);
+    }
   });
 
   test('policy whitelist is non-empty and fresh-wallet criteria are present', () => {
