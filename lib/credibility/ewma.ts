@@ -72,11 +72,20 @@ export function buildEwmaSeries(scores: readonly ScoreDto[]): EwmaSeries {
       at: s.created_at,
     });
   }
-  const values = points.map((p) => p.score);
+  // Reduce, never spread. `Math.min(...values)` / `Math.max(...values)` throw
+  // `RangeError: Maximum call stack size exceeded` once the array exceeds the
+  // engine's argument-count limit (~65k in V8), which a long score history can
+  // reach — crashing the chart render. A single linear pass keeps this total.
+  let min = SCORE_MAX;
+  let max = SCORE_MIN;
+  for (const p of points) {
+    if (p.score < min) min = p.score;
+    if (p.score > max) max = p.score;
+  }
   return {
     points,
-    min: values.length > 0 ? Math.min(...values) : SCORE_MIN,
-    max: values.length > 0 ? Math.max(...values) : SCORE_MAX,
+    min: points.length > 0 ? min : SCORE_MIN,
+    max: points.length > 0 ? max : SCORE_MAX,
   };
 }
 

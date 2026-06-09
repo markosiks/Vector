@@ -55,6 +55,18 @@ describe('buildEwmaSeries', () => {
     expect(s.min).toBe(0);
     expect(s.max).toBe(100);
   });
+
+  test('a very long history does not blow the stack on min/max', () => {
+    // Regression: min/max were computed with `Math.min(...values)`, which throws
+    // RangeError once the argument count exceeds the engine limit (~65k). The
+    // linear-pass version stays total over an arbitrarily long score history.
+    const n = 70_000;
+    const big = Array.from({ length: n }, (_, i) => score(String(i % 101), String(i + 1)));
+    const s = buildEwmaSeries(big);
+    expect(s.points).toHaveLength(n);
+    expect(s.min).toBe(0);
+    expect(s.max).toBe(100);
+  });
 });
 
 describe('sparklineGeometry', () => {
