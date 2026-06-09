@@ -1,0 +1,306 @@
+/*
+ * Attestation Log styling (P2.3). Shares the Arena's dark, high-contrast demo
+ * palette so the two screens read as one product. The reconciliation state is
+ * carried by colour *and* text (never colour alone) for accessibility, and all
+ * three tones clear WCAG AA on the panel background.
+ */
+
+.screen {
+  --bg: #0a0e17;
+  --panel: #121826;
+  --panel-2: #0f1522;
+  --edge: #1f2a3d;
+  --text: #e8eef9;
+  --muted: #8a98b3;
+  --link: #6aa8ff;
+  --pending: #f5c451;
+  --success: #36d399;
+  --danger: #ff5a5f;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1rem, 3vw, 3rem);
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: clamp(1rem, 2vw, 2rem);
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0.4rem 0 0;
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: clamp(0.85rem, 1.3vw, 1rem);
+  line-height: 1.45;
+}
+
+.filters {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+}
+
+.filterBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.35em 0.95em;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.filterBtn:hover {
+  color: var(--text);
+}
+
+.filterActive {
+  background: var(--edge);
+  color: var(--text);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: clamp(0.7rem, 1.4vw, 1.1rem) clamp(0.9rem, 1.6vw, 1.4rem);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+}
+
+.row[data-state='confirmed'] {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--edge));
+}
+
+.row[data-state='failed'] {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--edge));
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6ch;
+  font-size: clamp(1.2rem, 2.2vw, 1.8rem);
+  font-weight: 800;
+}
+
+.tag {
+  font-size: 0.62em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5ch;
+  font-size: clamp(0.8rem, 1.2vw, 0.95rem);
+}
+
+.metaLabel {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72em;
+  font-weight: 700;
+}
+
+.mono {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+}
+
+.link {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+  color: var(--link);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.rowFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  font-size: clamp(0.74rem, 1.1vw, 0.88rem);
+  color: var(--muted);
+}
+
+.confirmNote {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.failNote {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.stuckNote {
+  color: var(--pending);
+  font-weight: 600;
+}
+
+/* --- Chain-state badge --- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  padding: 0.28em 0.8em;
+  border-radius: 999px;
+  font-size: clamp(0.74rem, 1.1vw, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badgeDot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.badgeQualifier {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.tonePending {
+  color: var(--pending);
+  background: color-mix(in srgb, var(--pending) 16%, transparent);
+  border-color: color-mix(in srgb, var(--pending) 45%, transparent);
+}
+
+.toneSuccess {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+.toneDanger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+/* Keep the pending dot alive, but never strobe under reduced motion. */
+.tonePending .badgeDot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.footer {
+  margin-top: 1.2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.loadMore {
+  appearance: none;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6em 1.6em;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+.loadMore:hover:not(:disabled) {
+  border-color: var(--link);
+}
+
+.loadMore:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.state {
+  padding: 2rem 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+}
+
+.error {
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tonePending .badgeDot {
+    animation: none !important;
+  }
+}
