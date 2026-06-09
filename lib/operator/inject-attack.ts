@@ -10,7 +10,7 @@ import {
 } from '@/lib/db/repos/intents';
 import { getPolicyEventByIntent } from '@/lib/db/repos/policy-events';
 import { listLeaderboard, type LeaderboardRow } from '@/lib/db/repos/leaderboard';
-import { readKillSwitchState } from '@/lib/db/repos/kill-switch';
+import { getKillSwitch } from '@/lib/db/repos/kill-switch';
 import type { Queryable } from '@/lib/db/types';
 import type { Intent } from '@/lib/intent/types';
 import { signIntent } from '@/lib/intent/sign';
@@ -187,7 +187,18 @@ export async function injectScriptedAttack(args: InjectAttackArgs): Promise<Atta
   const now = args.now ?? new Date();
 
   const target = await resolveAttackTarget(db);
-  const killSwitch = await readKillSwitchState(db);
+  // The live pipeline reads the kill switch fail-open (a transient outage must
+  // not HALT every agent). The operator console is the opposite contract: this
+  // runs inside the audit transaction, so a kill-switch read fault must ABORT
+  // the injection (rolling back the whole transaction) rather than fail open and
+  // record an attack whose decision/rule reflects an "inactive" switch that was
+  // never actually observed. `getKillSwitch` propagates the error; the route's
+  // `route()` wrapper turns it into a 500 with nothing persisted.
+  const killSwitchRow = await getKillSwitch(db);
+  const killSwitch = {
+    active: killSwitchRow?.active ?? false,
+    reason: killSwitchRow?.reason ?? null,
+  };
 
   const state: RefereeState = {
     killSwitch,

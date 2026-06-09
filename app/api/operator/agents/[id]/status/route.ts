@@ -7,13 +7,22 @@ import { ok, readJson, route } from '@/lib/api/respond';
 import { withTransaction } from '@/lib/db/client';
 import { setAgentStatus } from '@/lib/db/repos/agents';
 import { insertOperatorAction } from '@/lib/db/repos/operator-actions';
-import { AGENT_STATUS } from '@/lib/db/schema';
+import { OPERATOR_SETTABLE_STATUS, operatorStatusBody } from '@/lib/operator/agent-status-input';
 import { requireOperator } from '@/lib/operator/auth';
 
 /**
- * `POST /api/operator/agents/:id/status` — set one agent's operator status
- * (`active` | `halted` | `gated`), the per-agent HALT control (§11.1). Operator
- * only; the status write and its audit row commit atomically.
+ * `POST /api/operator/agents/:id/status` — set one agent's operator status, the
+ * per-agent HALT control (§11.1). Operator only; the status write and its audit
+ * row commit atomically.
+ *
+ * The console exposes exactly two operator-settable states: `halted` and
+ * `active` (resume). `'gated'` is **deliberately excluded** — it is the scoring
+ * engine's exclusive domain and, crucially, it does NOT stop intent execution:
+ * the referee only HALTs on `status === 'halted'`, while `'gated'` merely gates
+ * the agent out of capital allocation (P1.3). Accepting `'gated'` here would let
+ * an operator believe they had halted an agent on the safety console while its
+ * Intents kept flowing through the referee — a per-agent HALT bypass. The
+ * blocking control must only ever flip between `halted` and `active`.
  *
  * A per-agent HALT cuts the agent two ways, both already enforced by the
  * components that read `agents.status`: the referee HALTs its Intents (rule #1b,
@@ -24,7 +33,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const paramId = z.string().uuid();
-const body = z.object({ status: z.enum(AGENT_STATUS) }).strict();
+const body = operatorStatusBody;
 
 export function POST(
   req: NextRequest,
@@ -39,7 +48,10 @@ export function POST(
     }
     const parsed = body.safeParse(await readJson(req));
     if (!parsed.success) {
-      throw new BadRequestError(`Expected { status: ${AGENT_STATUS.join(' | ')} }`, 'invalid_body');
+      throw new BadRequestError(
+        `Expected { status: ${OPERATOR_SETTABLE_STATUS.join(' | ')} }`,
+        'invalid_body',
+      );
     }
     const id = idParsed.data;
     const { status } = parsed.data;

@@ -24,7 +24,10 @@ import {
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const loginBody = z.object({ token: z.string().min(1) }).strict();
+// Bound the presented token: the configured `OPERATOR_CONSOLE_TOKEN` is itself
+// capped at 4096 chars (env schema's MAX_URL_LEN), so anything longer can never
+// match — reject it at the boundary instead of hashing an unbounded body.
+const loginBody = z.object({ token: z.string().min(1).max(4096) }).strict();
 
 export function POST(req: NextRequest): Promise<Response> {
   return route(async () => {

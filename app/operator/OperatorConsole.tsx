@@ -58,7 +58,7 @@ export function OperatorConsole(): ReactNode {
         <h1 className={styles.title}>Operator Console</h1>
         <button
           className={styles.linkBtn}
-          onClick={() => void logout().then(() => window.location.reload())}
+          onClick={() => void logout().finally(() => window.location.reload())}
         >
           Sign out
         </button>
