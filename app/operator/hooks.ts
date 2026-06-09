@@ -52,9 +52,15 @@ export async function login(token: string): Promise<void> {
   await postJson('/api/operator/session', { token });
 }
 
-/** Log out (clear the session cookie). */
+/**
+ * Log out (clear the session cookie). Throws on a non-2xx so the caller can tell
+ * a real logout from a failed one; the caller still re-gates on the server page
+ * regardless (a failed DELETE means the cookie persists and the console should
+ * keep showing the signed-in state rather than silently pretend otherwise).
+ */
 export async function logout(): Promise<void> {
-  await fetch('/api/operator/session', { method: 'DELETE' });
+  const res = await fetch('/api/operator/session', { method: 'DELETE' });
+  if (!res.ok) throw new Error(`http_${res.status}`);
 }
 
 /** Toggle the global kill switch. */
