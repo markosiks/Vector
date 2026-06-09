@@ -37,6 +37,6 @@ export function buildElfaMock(): ElfaSignal {
     origin: 'mock',
     endpoint: ELFA_TRENDING_PATH,
     fetchedAtMs: SEEDED_FETCHED_AT_MS,
-    sentiments: SEEDED_SENTIMENTS.map((s) => Object.freeze({ ...s })),
+    sentiments: Object.freeze(SEEDED_SENTIMENTS.map((s) => Object.freeze({ ...s }))),
   }) as ElfaSignal;
 }

@@ -164,6 +164,54 @@ describe('elfa provider — concurrency & resilience', () => {
     expect(p.current()).toEqual(MOCK);
   });
 
+  test('fail-open against an exotic rejection: a throwing `.name` getter never rejects the detached fetch', async () => {
+    // The detached `runFetch` is documented as "never rejects". The one place
+    // that could break that is reading `.name` off the thrown value, so a hostile
+    // error whose `name` getter throws must still be swallowed (reason 'unknown').
+    const exotic = new Error('boom');
+    Object.defineProperty(exotic, 'name', {
+      get() {
+        throw new Error('name getter exploded');
+      },
+    });
+    let count = 0;
+    const client: ElfaClient = {
+      fetchSignal: () => {
+        count += 1;
+        return Promise.reject(exotic);
+      },
+    };
+    const events: ElfaCallEvent[] = [];
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    const p = createElfaSignalProvider({
+      mock: MOCK,
+      client,
+      pollEveryNTicks: 1,
+      cacheTtlMs: 0,
+      now: () => 0,
+      logger: (e) => events.push(e),
+    });
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      expect(() => p.maybeRefresh(0)).not.toThrow();
+      await flush();
+      await flush();
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    expect(count).toBe(1);
+    expect(unhandled).toHaveLength(0); // the detached fetch did not reject
+    // Fail-open: no live value landed ⇒ the mock is still served, and the error
+    // was logged with a redacted reason (never the thrown object's details).
+    expect(p.current()).toEqual(MOCK);
+    const errEvent = events.find((e) => e.type === 'fetch_error');
+    expect(errEvent).toBeDefined();
+    expect(errEvent && 'reason' in errEvent ? errEvent.reason : undefined).toBe('unknown');
+  });
+
   test('fail-open after a success: a later rejected fetch keeps the last live snapshot', async () => {
     const c = controllableClient();
     const p = createElfaSignalProvider({
