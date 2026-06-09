@@ -65,6 +65,47 @@ describe('buildBreakdown composition', () => {
   });
 });
 
+describe('buildBreakdown proportion bar geometry', () => {
+  test('result fill is the clamped raw on a 0–100 axis', () => {
+    expect(buildBreakdown({ perf: 0.5, w: 0.4, policy: 5, dd: 2 }).resultFillPct).toBe(23); // raw 23
+    expect(buildBreakdown({ perf: 0.6, w: 0.5, policy: -40, dd: 0 }).resultFillPct).toBe(0); // raw 0
+    expect(buildBreakdown({ perf: 1, w: 1, policy: 50, dd: 0 }).resultFillPct).toBe(100); // raw 100
+  });
+
+  test('contributions are the three additive point-terms, in composition order', () => {
+    const b = buildBreakdown({ perf: 0.5, w: 0.4, policy: 5, dd: 2 });
+    expect(b.contributions.map((c) => c.key)).toEqual(['performance', 'policy', 'dd']);
+    const byKey = Object.fromEntries(b.contributions.map((c) => [c.key, c]));
+    // performance = 100·0.5·0.4 = 20 (positive), policy = +5, dd reported as −2.
+    expect(byKey.performance).toMatchObject({ points: 20, sign: 'positive', widthPct: 20 });
+    expect(byKey.policy).toMatchObject({ points: 5, sign: 'positive', widthPct: 5 });
+    expect(byKey.dd).toMatchObject({ points: -2, sign: 'negative', widthPct: 2 });
+  });
+
+  test('a negative policy is a negative contribution; exact zero is its own bucket', () => {
+    const b = buildBreakdown({ perf: 0, w: 0, policy: -40, dd: 0 });
+    const byKey = Object.fromEntries(b.contributions.map((c) => [c.key, c]));
+    expect(byKey.performance).toMatchObject({ points: 0, sign: 'zero', widthPct: 0 });
+    expect(byKey.policy).toMatchObject({ points: -40, sign: 'negative', widthPct: 40 });
+    expect(byKey.dd).toMatchObject({ points: 0, sign: 'zero', widthPct: 0 });
+  });
+
+  test('an extreme term saturates the bar width at 100% rather than overflowing', () => {
+    // Two stacked hard penalties (−80) and a huge drawdown (−120 points).
+    const b = buildBreakdown({ perf: 1, w: 1, policy: -80, dd: 120 });
+    const widthOf = (key: string): number =>
+      b.contributions.find((c) => c.key === key)?.widthPct ?? Number.NaN;
+    expect(widthOf('policy')).toBe(80);
+    expect(widthOf('dd')).toBe(100); // |−120|/100 clamps to 1 → 100%.
+    for (const c of b.contributions) {
+      expect(c.widthPct).toBeGreaterThanOrEqual(0);
+      expect(c.widthPct).toBeLessThanOrEqual(100);
+    }
+    expect(b.resultFillPct).toBeGreaterThanOrEqual(0);
+    expect(b.resultFillPct).toBeLessThanOrEqual(100);
+  });
+});
+
 describe('consistency with the P1.2 scorer', () => {
   const cfg = CONFIG.scoring;
   const cases = [
