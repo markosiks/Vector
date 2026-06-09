@@ -7,7 +7,14 @@ import {
   type PolicySeverity,
 } from '../schema';
 import type { Queryable } from '../types';
-import { CURSOR_KEY_SQL, insertOne, type Keyset, keysetBefore, selectMany } from './_shared';
+import {
+  CURSOR_KEY_SQL,
+  insertOne,
+  type Keyset,
+  keysetBefore,
+  selectMany,
+  selectOne,
+} from './_shared';
 
 /**
  * A page row carries the microsecond-precision {@link CURSOR_KEY_SQL} alias
@@ -42,6 +49,25 @@ export function insertPolicyEvent(db: Queryable, input: NewPolicyEvent): Promise
       severity: input.severity,
       detail_json: input.detail_json,
     },
+    policyEventRow,
+  );
+}
+
+/**
+ * The referee decision recorded for an Intent, or `null`. The referee writes
+ * exactly one policy event per Intent; should more than one ever exist, the
+ * newest wins (the same `created_at DESC, id DESC` tie-break used by the feeds).
+ * Used to report the *recorded* outcome of an idempotent retry, independent of
+ * any later state change.
+ */
+export function getPolicyEventByIntent(
+  db: Queryable,
+  intentId: string,
+): Promise<PolicyEventRow | null> {
+  return selectOne(
+    db,
+    'SELECT * FROM policy_events WHERE intent_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1',
+    [intentId],
     policyEventRow,
   );
 }
