@@ -30,6 +30,26 @@ export class BadRequestError extends ApiError {
   }
 }
 
+/** 401 — the request lacks a valid operator session (missing/invalid credential). */
+export class UnauthorizedError extends ApiError {
+  constructor(message = 'Operator authentication required', code = 'unauthorized') {
+    super(401, code, message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+/**
+ * 403 — the operator console is not configured for this deployment, so the
+ * controls are disabled outright (no `OPERATOR_CONSOLE_TOKEN`). Distinct from
+ * 401: there is no credential that could ever succeed here.
+ */
+export class ForbiddenError extends ApiError {
+  constructor(message = 'Operator console is disabled', code = 'operator_disabled') {
+    super(403, code, message);
+    this.name = 'ForbiddenError';
+  }
+}
+
 /** 404 — a well-formed identifier referenced a row that does not exist. */
 export class NotFoundError extends ApiError {
   constructor(message = 'Not found', code = 'not_found') {

@@ -4,6 +4,7 @@ import { Pool } from '@neondatabase/serverless';
 
 import { ENV } from '../config/env';
 import type { DbState } from '../health';
+import type { Queryable } from './types';
 
 /**
  * Server-only Neon (Postgres) access.
@@ -70,6 +71,34 @@ export function resetPool(): void {
  */
 export function setPoolForTest(p: Pool | undefined): void {
   pool = p;
+}
+
+/**
+ * Run `fn` inside a single-connection transaction: `BEGIN`, the body, then
+ * `COMMIT` — or `ROLLBACK` and rethrow if the body throws. The dedicated client
+ * is always released. This is the write path for the mutating operator routes
+ * (P2.4), where a state change and its audit row must commit atomically (a torn
+ * write would leave the kill switch toggled with no audit trail, or vice versa).
+ *
+ * The body receives a {@link Queryable} bound to the transaction's connection;
+ * pass it to repos so all their statements land on the same client. Do not use
+ * the shared pool inside `fn` — those queries would run outside the transaction.
+ */
+export async function withTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    try {
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK').catch((): void => undefined);
+      throw err;
+    }
+  } finally {
+    client.release();
+  }
 }
 
 /** Default upper bound on the health probe before it reports `down`. */
