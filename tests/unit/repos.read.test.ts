@@ -5,7 +5,7 @@ import { listLeaderboard } from '@/lib/db/repos/leaderboard';
 import { listRecentOutcomesByAgent } from '@/lib/db/repos/outcomes';
 import { listPolicyEventsPage, listRecentPolicyEventsByAgent } from '@/lib/db/repos/policy-events';
 import { getLatestRound } from '@/lib/db/repos/rounds';
-import { listScoreHistoryByAgent } from '@/lib/db/repos/scores';
+import { listScoreHistoryByAgent, SCORE_HISTORY_MAX } from '@/lib/db/repos/scores';
 import type { Queryable } from '@/lib/db/types';
 
 /**
@@ -138,11 +138,21 @@ describe('listRecentOutcomesByAgent', () => {
 });
 
 describe('listScoreHistoryByAgent', () => {
-  test('orders by round index then score id (not created_at)', async () => {
+  test('selects the most recent rounds by index, returned oldest-first, bounded by a limit', async () => {
     const db = new SpyDb();
     await listScoreHistoryByAgent(db, AGENT);
     expect(db.last?.sql).toContain('JOIN rounds r ON r.id = s.round_id');
-    expect(db.last?.sql).toContain('ORDER BY r.index ASC, s.id ASC');
-    expect(db.last?.params).toEqual([AGENT]);
+    // Inner: newest rounds first (round index, not created_at) so the LIMIT keeps the recent window.
+    expect(db.last?.sql).toContain('ORDER BY r.index DESC, s.id DESC');
+    // Outer: flipped back to ascending for the EWMA curve.
+    expect(db.last?.sql).toContain('ORDER BY round_index ASC, id ASC');
+    expect(db.last?.sql).toContain('LIMIT $2');
+    expect(db.last?.params).toEqual([AGENT, SCORE_HISTORY_MAX]);
+  });
+
+  test('forwards an explicit limit', async () => {
+    const db = new SpyDb();
+    await listScoreHistoryByAgent(db, AGENT, 250);
+    expect(db.last?.params).toEqual([AGENT, 250]);
   });
 });
