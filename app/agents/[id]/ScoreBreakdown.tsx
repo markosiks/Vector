@@ -92,7 +92,7 @@ export function ScoreBreakdown({ components }: ScoreBreakdownProps): ReactNode {
             </span>
             <span className={styles.barTrack}>
               <span
-                className={`${styles.barFill} ${toneClass(c.sign)}`}
+                className={styles.barFill}
                 data-sign={c.sign}
                 style={{ width: `${c.widthPct}%` }}
               />
