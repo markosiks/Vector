@@ -38,11 +38,19 @@ export function constantTimeEqual(a: unknown, b: unknown): boolean {
  *
  * Fail-closed: when no token is configured (`configured` is `undefined`/empty)
  * the console is disabled, so *every* presented token is rejected — there is no
- * "open" mode. A present token is accepted only on a constant-time exact match.
+ * "open" mode. A present token is accepted only on an exact match.
+ *
+ * The comparison runs over the **sha256 digests** of both sides (as the session
+ * path already does), not the raw strings. Digests are always 64 hex chars, so
+ * the length-mismatch branch of `constantTimeEqual` can never fire on the login
+ * path: a wrong guess no longer leaks the configured token's byte length through
+ * timing. Correctness is unchanged — `sha256(a) === sha256(b) ⇔ a === b` for the
+ * relevant input space (a sha256 collision is not a practical attack).
  */
 export function verifyOperatorToken(presented: unknown, configured: string | undefined): boolean {
   if (typeof configured !== 'string' || configured.length === 0) return false;
-  return constantTimeEqual(presented, configured);
+  if (typeof presented !== 'string') return false;
+  return constantTimeEqual(deriveSessionToken(presented), deriveSessionToken(configured));
 }
 
 /**
