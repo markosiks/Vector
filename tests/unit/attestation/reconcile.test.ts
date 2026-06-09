@@ -9,7 +9,7 @@ import {
 } from '@/lib/attestation/reconcile';
 import type { AttestationRow } from '@/lib/db/schema';
 
-import { FakeAttestationDb } from '../fixtures/attestation-db';
+import { FakeAttestationDb } from '@/tests/fixtures/attestation-db';
 
 /**
  * The receipt watcher is the optimistic→terminal state machine. These pin its

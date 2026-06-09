@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { detectRankChanges, rankAgents } from '@/lib/arena/rank';
-import { makeAgent } from '../fixtures/arena-fixtures';
+import { makeAgent } from '@/tests/fixtures/arena-fixtures';
 
 const POOL = 1_000_000;
 

@@ -13,7 +13,7 @@ import {
   policyEventRowFixture,
   roundRowFixture,
   scoreRowFixture,
-} from '../fixtures/read-api-fixtures';
+} from '@/tests/fixtures/read-api-fixtures';
 
 /**
  * The route handlers wired to a fake pool: the real repo SQL builders and DTO
