@@ -59,6 +59,29 @@ export interface BreakdownTerm {
   readonly role: TermRole;
 }
 
+/** The sign of a point-scale contribution, for colour/role in the proportion bar. */
+export type ContributionSign = 'positive' | 'negative' | 'zero';
+
+/**
+ * One additive **point-scale** contribution to `raw_r`, with its proportional
+ * bar geometry. Unlike {@link BreakdownTerm} (the four raw components), these are
+ * the three terms that actually *add up* on the 0–100 points axis:
+ * `performance` (the `100·perf·w` product), `policy`, and `dd` (always
+ * subtracted). `widthPct` is the term's magnitude as a percentage of the score
+ * codomain (`|points| / 100`, clamped to `[0,100]`), so a render can size a bar
+ * directly and an extreme term (e.g. several stacked `hard`s) saturates the bar
+ * rather than overflowing it.
+ */
+export interface BreakdownContribution {
+  readonly key: 'performance' | 'policy' | 'dd';
+  readonly label: string;
+  /** Signed contribution in score points (`dd` is reported as `−dd`). */
+  readonly points: number;
+  readonly sign: ContributionSign;
+  /** `clamp(|points| / 100, 0, 1) · 100` — proportional bar width, in `[0,100]`. */
+  readonly widthPct: number;
+}
+
 /** The fully-reconstructed §6.1 composition for one round's components. */
 export interface ScoreBreakdown {
   readonly perf: number;
@@ -75,6 +98,36 @@ export interface ScoreBreakdown {
   readonly clamped: boolean;
   /** The ordered terms, for rendering the formula as `100·perf·w + policy − dd`. */
   readonly terms: readonly BreakdownTerm[];
+  /** `clamp(raw / 100, 0, 1) · 100` — the net result as a percentage of the bar. */
+  readonly resultFillPct: number;
+  /**
+   * The three additive point-scale contributions (`performance`, `policy`,
+   * `dd`) with proportional bar geometry, for the visual breakdown. Ordered as
+   * they compose `raw`.
+   */
+  readonly contributions: readonly BreakdownContribution[];
+}
+
+/** Sign bucket for a signed point contribution (exact-zero is its own bucket). */
+function signOf(points: number): ContributionSign {
+  if (points > 0) return 'positive';
+  if (points < 0) return 'negative';
+  return 'zero';
+}
+
+/** A point contribution's proportional width on the 0–100 score axis. */
+function widthPctOf(points: number): number {
+  return round6(clamp(Math.abs(points) / 100, 0, 1) * 100);
+}
+
+/** Build one {@link BreakdownContribution} from a signed point value. */
+function contribution(
+  key: BreakdownContribution['key'],
+  label: string,
+  points: number,
+): BreakdownContribution {
+  const p = round6(points);
+  return { key, label, points: p, sign: signOf(p), widthPct: widthPctOf(p) };
 }
 
 /**
@@ -100,6 +153,13 @@ export function buildBreakdown(c: ScoreComponents): ScoreBreakdown {
       { key: 'w', label: 'Capital weight', value: c.w, role: 'factor' },
       { key: 'policy', label: 'Policy', value: c.policy, role: 'add' },
       { key: 'dd', label: 'Drawdown', value: c.dd, role: 'subtract' },
+    ],
+    resultFillPct: round6(clamp(raw / 100, 0, 1) * 100),
+    contributions: [
+      contribution('performance', 'Performance × weight', performancePoints),
+      contribution('policy', 'Policy', c.policy),
+      // Drawdown always subtracts, so it is reported as a negative contribution.
+      contribution('dd', 'Drawdown', -c.dd),
     ],
   };
 }

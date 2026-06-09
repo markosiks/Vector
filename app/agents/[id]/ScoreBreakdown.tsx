@@ -1,8 +1,16 @@
 import type { ReactNode } from 'react';
 
+import type { ContributionSign } from '@/lib/credibility/components';
 import { breakdownFrom } from '@/lib/credibility/components';
 import { formatFactor, formatPoints } from '@/lib/credibility/format';
 import styles from './agent-detail.module.css';
+
+/** Map a contribution's sign to its bar/value tone class (green/red/muted). */
+function toneClass(sign: ContributionSign): string {
+  if (sign === 'positive') return styles.pos ?? '';
+  if (sign === 'negative') return styles.neg ?? '';
+  return styles.muted ?? '';
+}
 
 export interface ScoreBreakdownProps {
   /** The latest scored round's `components_json` (untrusted; may be null/broken). */
@@ -69,6 +77,39 @@ export function ScoreBreakdown({ components }: ScoreBreakdownProps): ReactNode {
           </dd>
         </div>
       </dl>
+
+      {/*
+       * Proportional contribution bars: a visual, at-a-glance read of how the
+       * three additive point-terms compose `raw` on a 0–100 axis. Decorative —
+       * the same numbers are announced by the `terms` list and the result row —
+       * so the whole block is aria-hidden to avoid double-reading for AT.
+       */}
+      <div className={styles.bars} data-testid="breakdown-bars" aria-hidden="true">
+        {b.contributions.map((c) => (
+          <div className={styles.barRow} key={c.key} data-testid={`bar-${c.key}`}>
+            <span className={styles.barLabel} title={c.label}>
+              {c.label}
+            </span>
+            <span className={styles.barTrack}>
+              <span
+                className={`${styles.barFill} ${toneClass(c.sign)}`}
+                data-sign={c.sign}
+                style={{ width: `${c.widthPct}%` }}
+              />
+            </span>
+            <span className={`${styles.barValue} ${styles.mono} ${toneClass(c.sign)}`}>
+              {formatPoints(c.points, true)}
+            </span>
+          </div>
+        ))}
+        <div className={`${styles.barRow} ${styles.barResultRow}`} data-testid="bar-result">
+          <span className={styles.barLabel}>Result</span>
+          <span className={styles.barTrack}>
+            <span className={styles.barFillResult} style={{ width: `${b.resultFillPct}%` }} />
+          </span>
+          <span className={`${styles.barValue} ${styles.mono}`}>{formatPoints(b.raw)}</span>
+        </div>
+      </div>
 
       <div className={styles.result}>
         <span className={styles.muted}>= clamp({formatPoints(b.rawUnclamped)}, 0, 100)</span>
