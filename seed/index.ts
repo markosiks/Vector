@@ -154,6 +154,27 @@ const FILL_PROFILE: Readonly<Record<string, { carBase: number; pnlBase: number }
 };
 
 /**
+ * Drain-safety invariant, enforced at module load: every roster agent must have
+ * an **explicit** fill profile.
+ *
+ * The roster (`SEED_AGENTS`) and `FILL_PROFILE` are two append-only lists that
+ * must stay in sync. A missing entry is a programming error — and a dangerous
+ * one: it would otherwise fall back to a generic, *router-eligible* default
+ * (`w = car/(car+c_floor) = 0.5`, `perf → 1` ⇒ score ≈ 50 > `s_min`), silently
+ * adding an unintended capital-bearing agent and splitting the leader→runner-up
+ * drain reroute. We fail loudly here so the mistake surfaces the moment the
+ * module is imported (in any test or at startup) rather than as a corrupted arc.
+ */
+for (const agent of SEED_AGENTS) {
+  if (!Object.prototype.hasOwnProperty.call(FILL_PROFILE, agent.id)) {
+    throw new Error(
+      `seed: SEED_AGENTS member "${agent.id}" has no FILL_PROFILE entry; ` +
+        'every roster agent must declare an explicit fill profile (drain-safety invariant).',
+    );
+  }
+}
+
+/**
  * Build the frozen demo arc. Pure and deterministic: a fixed seed
  * `(version, rounds, timing)` always yields the same arc. The attack lands on
  * the **settle tick of the final round** so the drain's `policy_event` is scored
@@ -182,7 +203,12 @@ export function buildDemoArc(options: BuildDemoArcOptions = {}): DemoArc {
 
   const outcomes: Record<string, SeedOutcome[]> = {};
   for (const agent of SEED_AGENTS) {
-    const profile = FILL_PROFILE[agent.id] ?? { carBase: 1_000, pnlBase: 10 };
+    // Totality is guaranteed by the module-load invariant above; this throw
+    // keeps the lookup type-total (no silent, router-eligible default profile).
+    const profile = FILL_PROFILE[agent.id];
+    if (profile === undefined) {
+      throw new Error(`seed: no FILL_PROFILE entry for roster agent "${agent.id}"`);
+    }
     outcomes[agent.id] = Array.from({ length: totalTicks }, (_, index) =>
       seedOutcomeAt(profile.carBase, profile.pnlBase, index),
     );
