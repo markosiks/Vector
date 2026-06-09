@@ -141,12 +141,37 @@ describeDb('operator console — write paths (isolated schema on real Neon)', ()
 
     const second = await injectScriptedAttack({ db, idempotencyKey: key });
     expect(second.duplicate).toBe(true);
-    expect(second.intentId).toBeNull();
+    // A truly idempotent retry reports the *persisted* Intent — the same id and
+    // hash as the original, read back — not a freshly built one.
+    expect(second.intentId).toBe(first.intentId);
     expect(second.intentHash).toBe(first.intentHash);
+    // And the *recorded* decision, reconstructed from the original policy_event.
     expect(second.decision.decision).toBe('REJECT');
+    expect(second.decision.rule_fired).toBe('fresh_wallet_transfer_block');
 
     const after = (await listRecentPolicyEvents(db, 100)).length;
     expect(after).toBe(before); // no new policy_event from the retry
+  });
+
+  test('an idempotent retry reports the recorded decision, not the current state', async () => {
+    // Original injection is REJECTed and recorded.
+    const key = randomUUID();
+    const first = await injectScriptedAttack({ db, idempotencyKey: key });
+    expect(first.decision.decision).toBe('REJECT');
+
+    // A stop is later activated. A naive retry that re-evaluates against the
+    // *current* state would now report HALT — a decision that never happened to
+    // the original Intent. The truthful retry reports the recorded REJECT.
+    await setKillSwitch(db, { active: true, reason: 'freeze', set_by: 'operator' });
+    try {
+      const retry = await injectScriptedAttack({ db, idempotencyKey: key });
+      expect(retry.duplicate).toBe(true);
+      expect(retry.intentId).toBe(first.intentId);
+      expect(retry.decision.decision).toBe('REJECT');
+      expect(retry.decision.rule_fired).toBe('fresh_wallet_transfer_block');
+    } finally {
+      await setKillSwitch(db, { active: false, reason: null, set_by: 'operator' });
+    }
   });
 
   test('a global HALT turns the injected drain into a HALT', async () => {

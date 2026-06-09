@@ -96,6 +96,26 @@ export function getIntent(db: Queryable, id: string): Promise<IntentRow | null> 
 }
 
 /**
+ * The Intent already reserved for a `(agent_id, nonce)`, or `null`. The
+ * complement of {@link insertIntentReserving}: when a reservation loses the race
+ * (returns `null`), this reads the row that won, so an idempotent retry can
+ * report the *persisted* Intent (its real id/hash) rather than re-deriving from a
+ * freshly built one. `agentId` is the `agents.id` uuid.
+ */
+export function getIntentByAgentNonce(
+  db: Queryable,
+  agentId: string,
+  nonce: string,
+): Promise<IntentRow | null> {
+  return selectOne(
+    db,
+    'SELECT * FROM intents WHERE agent_id = $1 AND nonce = $2',
+    [agentId, nonce],
+    intentRow,
+  );
+}
+
+/**
  * The intent hashes an agent submitted in one round, oldest first — the audit
  * trail folded into a round's attestation detail document. Ordered by
  * `created_at, id` so the list (and therefore the detail hash) is deterministic
