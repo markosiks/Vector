@@ -4,7 +4,7 @@ import { CONFIG } from '@/lib/config/constants';
 import { SEED_LEADER_ID, SEED_RUNNER_UP_ID } from '@/lib/agents/seed';
 import { buildDemoArc, DEMO_ARC, DEMO_ROUNDS } from '@/seed';
 
-import golden from '../fixtures/seed-arc-golden.json';
+import golden from '@/tests/fixtures/seed-arc-golden.json';
 
 /**
  * Golden regression for the frozen demo dataset (§6.5). A fixed seed

@@ -12,7 +12,7 @@ import {
 import type { AttestationRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
 
-import { FakeAttestationDb } from '../fixtures/attestation-db';
+import { FakeAttestationDb } from '@/tests/fixtures/attestation-db';
 
 /**
  * The submit step writes **exactly one** `giveFeedback` per attestation. These

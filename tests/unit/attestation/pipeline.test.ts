@@ -6,7 +6,7 @@ import { mirrorAttestation, type MirrorFacts } from '@/lib/attestation/pipeline'
 import type { OutcomeRow, PolicyEventRow } from '@/lib/db/schema';
 import type { ScoreInputs, ScoreResult } from '@/lib/scoring/types';
 
-import { FakeAttestationDb } from '../fixtures/attestation-db';
+import { FakeAttestationDb } from '@/tests/fixtures/attestation-db';
 
 /**
  * The in-transaction mirror is the exactly-one-per-round artifact written atomically
