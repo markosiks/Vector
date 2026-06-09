@@ -14,7 +14,7 @@ import type { ElfaSignal } from './types';
  * non-deterministic — embedding this snapshot in `context` cannot change the
  * signed Intent bytes because the seed strategies ignore `context.signals`.
  *
- * The sentiment values are illustrative, in a vendor-plausible range, and 
+ * The sentiment values are illustrative, in a vendor-plausible range, and
  * `origin: 'mock'` marks them transparently as seeded rather than live.
  */
 const SEEDED_FETCHED_AT_MS = 1_700_000_000_000;

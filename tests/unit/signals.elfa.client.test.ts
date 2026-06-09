@@ -45,7 +45,13 @@ describe('elfa client — happy path', () => {
   test('normalizes a top-level array into a typed live snapshot', async () => {
     const { fetchImpl } = stubFetch(
       jsonResponse([
-        { symbol: 'BTC', tokenAddress: '0xabc', sentiment: '0.62', mentions: '1840', mindshare: '0.31' },
+        {
+          symbol: 'BTC',
+          tokenAddress: '0xabc',
+          sentiment: '0.62',
+          mentions: '1840',
+          mindshare: '0.31',
+        },
       ]),
     );
     const client = createElfaClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl, now: () => 42 });
@@ -57,14 +63,22 @@ describe('elfa client — happy path', () => {
       endpoint: ELFA_TRENDING_PATH,
       fetchedAtMs: 42,
       sentiments: [
-        { symbol: 'BTC', tokenAddress: '0xabc', sentiment: '0.62', mentions: '1840', mindshare: '0.31' },
+        {
+          symbol: 'BTC',
+          tokenAddress: '0xabc',
+          sentiment: '0.62',
+          mentions: '1840',
+          mindshare: '0.31',
+        },
       ],
     });
   });
 
   test('unwraps the `{ data: [...] }` envelope and key aliases', async () => {
     const { fetchImpl } = stubFetch(
-      jsonResponse({ data: [{ tokenSymbol: 'PEPE', sentimentScore: -0.25, token_address: '0xdef' }] }),
+      jsonResponse({
+        data: [{ tokenSymbol: 'PEPE', sentimentScore: -0.25, token_address: '0xdef' }],
+      }),
     );
     const client = createElfaClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl });
     const signal = await client.fetchSignal();
