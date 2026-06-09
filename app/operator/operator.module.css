@@ -116,7 +116,15 @@
   opacity: 0.4;
 }
 
-button {
+/*
+ * Base button styling for the operator surfaces. CSS Modules reject bare
+ * element selectors ("button is not pure"), which breaks `next build`. The
+ * `:where()` anchor references local classes so the selector is pure, while
+ * contributing zero specificity — every <button> already lives inside
+ * `.screen` (console) or `.loginScreen` (login), so scope and cascade are
+ * unchanged and the per-variant button classes still win.
+ */
+:where(.screen, .loginScreen) button {
   cursor: pointer;
   font: inherit;
   border-radius: 8px;
@@ -125,7 +133,7 @@ button {
   font-weight: 600;
 }
 
-button:disabled {
+:where(.screen, .loginScreen) button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -265,7 +273,9 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  /* Scoped to the operator roots so the selector is pure (CSS Modules reject a
+     bare `*`); `:where()` keeps specificity at zero, preserving the reset. */
+  :where(.screen, .loginScreen) * {
     transition: none !important;
     animation: none !important;
   }

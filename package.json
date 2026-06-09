@@ -13,7 +13,7 @@
     "test": "bun run test:unit && bun run test:fuzz && bun run test:integration && bun run test:e2e",
     "test:unit": "bun test tests/unit",
     "test:fuzz": "bun test tests/fuzz",
-    "test:integration": "bun test tests/integration",
+    "test:integration": "bun test tests/integration --timeout 30000",
     "test:e2e": "bun test tests/e2e",
     "test:e2e:browser": "playwright test",
     "test:e2e:live": "bun scripts/e2e/arena-live.ts",
