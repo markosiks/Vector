@@ -81,7 +81,9 @@ canonical `…/tx/0x…` / `…/block/N` URL from `CONFIG.chain.mantle_explorer_
 ## Edge cases covered
 
 Failed / stuck-optimistic rows; empty feeds and empty sections; long history
-(keyset paging); broken DTOs (invalid components, non-decimal `score_r` such as a
+(attestations via keyset paging; the agent EWMA history is bounded server-side
+to the most recent `SCORE_HISTORY_MAX` rounds so the polled payload and the SVG
+path stay bounded); broken DTOs (invalid components, non-decimal `score_r` such as a
 hex literal, malformed `tx_hash`); a malformed agent id → explicit not-found (no
 retry storm); locale-independent number/score/timestamp formatting (UTC); and a
 static, `prefers-reduced-motion`-safe EWMA chart.
