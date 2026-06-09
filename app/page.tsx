@@ -23,6 +23,9 @@ export default function HomePage(): ReactNode {
       <p>
         <a href="/api/health">/api/health</a>
       </p>
+      <p>
+        Building an agent? <a href="/onboarding">Make it Vector-compatible →</a>
+      </p>
     </main>
   );
 }
