@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CONFIG } from '@/lib/config/constants';
 import {
+  SEED_AGENTS,
   SEED_CONTRARIAN_ID,
   SEED_FEATHERWEIGHT_ID,
   SEED_LEADER_ID,
@@ -101,5 +102,38 @@ describe('extra seed agents — eligibility invariant (drain-safety)', () => {
 
   test('the replay is deterministic (same arc ⇒ identical trajectory)', () => {
     expect(scoreTrajectory(SEED_FEATHERWEIGHT_ID)).toEqual(scoreTrajectory(SEED_FEATHERWEIGHT_ID));
+  });
+});
+
+describe('fill-profile totality (drain-safety: no silent eligible default)', () => {
+  // The eligibility invariant above only holds if EVERY roster agent draws its
+  // own explicit, distinct fill profile. A missing entry used to fall back to a
+  // generic `{ carBase: 1000, pnlBase: 10 }`, which is router-*eligible*
+  // (w = 1000/(1000+c_floor) = 0.5, perf → 1 ⇒ score ≈ 50 > s_min) and would
+  // silently add an unintended capital-bearing agent to the drain reroute. The
+  // fallback is gone; these guard that no agent slips through on a default.
+
+  test('every roster agent is given fills (no agent is silently dropped)', () => {
+    const arc = buildDemoArc();
+    for (const agent of SEED_AGENTS) {
+      const fills = arc.outcomes[agent.id];
+      expect(fills).toBeDefined();
+      expect(fills!.length).toBe(arc.totalTicks);
+    }
+    // Outcomes cover exactly the roster — no stray / missing keys.
+    expect(new Set(Object.keys(arc.outcomes))).toEqual(new Set(SEED_AGENTS.map((a) => a.id)));
+  });
+
+  test('each agent uses its own distinct seeded capital_at_risk, not a default', () => {
+    const arc = buildDemoArc();
+    const carOf = (id: string): number => Number(arc.outcomes[id]![0]!.capital_at_risk);
+    // The four documented, distinct profiles (seed/index.ts FILL_PROFILE).
+    expect(carOf(SEED_LEADER_ID)).toBe(32_000);
+    expect(carOf(SEED_RUNNER_UP_ID)).toBe(6_000);
+    expect(carOf(SEED_FEATHERWEIGHT_ID)).toBe(50);
+    expect(carOf(SEED_CONTRARIAN_ID)).toBe(1_500);
+    // All four are distinct — a fallback would collapse two of them onto 1000.
+    const cars = SEED_AGENTS.map((a) => carOf(a.id));
+    expect(new Set(cars).size).toBe(cars.length);
   });
 });
