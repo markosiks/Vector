@@ -253,6 +253,94 @@
   font-weight: 500;
 }
 
+/* --- Proportional contribution bars --- */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(6rem, 11rem) 1fr minmax(3.5rem, auto);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.barLabel {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  /* Long personality/term labels truncate rather than reflow the grid. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barTrack {
+  position: relative;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  /* `width` is set inline from `widthPct` (already clamped to [0,100]). */
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  transition: width 240ms ease;
+}
+
+.barFill[data-sign='positive'] {
+  background: color-mix(in srgb, var(--pos) 70%, transparent);
+}
+
+.barFill[data-sign='negative'] {
+  background: color-mix(in srgb, var(--neg) 70%, transparent);
+}
+
+.barFillResult {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--link), var(--pos));
+  transition: width 240ms ease;
+}
+
+.barResultRow {
+  margin-top: 0.15rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed var(--edge);
+}
+
+.barResultRow .barLabel {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.barResultRow .barTrack {
+  height: 0.85rem;
+}
+
+.barValue {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barFill,
+  .barFillResult {
+    transition: none;
+  }
+}
+
 .result {
   display: flex;
   align-items: baseline;
