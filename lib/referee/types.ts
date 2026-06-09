@@ -48,6 +48,14 @@ export interface AgentState {
   readonly remaining_budget: string;
   /** Current intra-round drawdown as a fraction (canonical decimal string). */
   readonly drawdown: string;
+  /**
+   * Operator per-agent HALT (`agents.status = 'halted'`). When `true` every
+   * Intent from this agent halts at rule #1b — symmetric with the global kill
+   * switch but scoped to one agent — so an operator HALT cuts the agent's
+   * execution as well as gating its capital in the router (§11.1, P2.4). Absent
+   * ⇒ not halted (the live pipeline derives it from `agents.status`).
+   */
+  readonly halted?: boolean;
 }
 
 /** The full state snapshot an evaluation runs against. */

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { encodeCursor } from './cursor';
-import { classifyError } from './errors';
+import { BadRequestError, classifyError } from './errors';
 
 /**
  * Response helpers shared by every read route: a uniform JSON envelope, the
@@ -20,6 +20,24 @@ const CACHE_HEADERS = { 'Cache-Control': 'no-store' } as const;
 /** A 200 JSON response with the no-store cache policy. */
 export function ok<T>(data: T): NextResponse {
   return NextResponse.json(data, { headers: CACHE_HEADERS });
+}
+
+/** A 204 No Content response (used by the operator session login/logout). */
+export function noContent(): NextResponse {
+  return new NextResponse(null, { status: 204, headers: CACHE_HEADERS });
+}
+
+/**
+ * Parse a request's JSON body, mapping a malformed/empty body to a 400 rather
+ * than letting the `SyntaxError` collapse to a generic 500. The result is
+ * `unknown`: the caller validates the shape (e.g. with a zod schema).
+ */
+export async function readJson(req: Request): Promise<unknown> {
+  try {
+    return await req.json();
+  } catch {
+    throw new BadRequestError('Request body must be valid JSON', 'invalid_json');
+  }
 }
 
 /** A keyset-paginated envelope: the page plus the cursor for the next page. */

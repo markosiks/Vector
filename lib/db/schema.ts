@@ -25,6 +25,7 @@ export const EXECUTION_RAIL = ['byreal', 'seed'] as const;
 export const EXECUTION_STATUS = ['sent', 'filled', 'partial', 'error'] as const;
 export const ALLOCATION_TRIGGER = ['settle', 'attestation', 'crash', 'operator'] as const;
 export const CHAIN_STATE = ['optimistic', 'confirmed', 'failed'] as const;
+export const OPERATOR_ACTION_KIND = ['kill_switch', 'agent_status', 'attack'] as const;
 
 export type AgentStatus = (typeof AGENT_STATUS)[number];
 export type StrategyKind = (typeof STRATEGY_KIND)[number];
@@ -37,6 +38,7 @@ export type ExecutionRail = (typeof EXECUTION_RAIL)[number];
 export type ExecutionStatus = (typeof EXECUTION_STATUS)[number];
 export type AllocationTrigger = (typeof ALLOCATION_TRIGGER)[number];
 export type ChainState = (typeof CHAIN_STATE)[number];
+export type OperatorActionKind = (typeof OPERATOR_ACTION_KIND)[number];
 
 // --- Reusable column codecs -------------------------------------------------
 /** Postgres `numeric`, surfaced as a decimal string to preserve precision. */
@@ -189,6 +191,15 @@ export const killSwitchRow = z.object({
   updated_at: ts,
 });
 
+export const operatorActionRow = z.object({
+  id: uuid,
+  kind: z.enum(OPERATOR_ACTION_KIND),
+  actor: z.string(),
+  agent_id: uuid.nullable(),
+  detail_json: z.unknown().nullable(),
+  created_at: ts,
+});
+
 export type AgentRow = z.infer<typeof agentRow>;
 export type RoundRow = z.infer<typeof roundRow>;
 export type IntentRow = z.infer<typeof intentRow>;
@@ -199,3 +210,4 @@ export type ScoreRow = z.infer<typeof scoreRow>;
 export type CapitalAllocationRow = z.infer<typeof capitalAllocationRow>;
 export type AttestationRow = z.infer<typeof attestationRow>;
 export type KillSwitchRow = z.infer<typeof killSwitchRow>;
+export type OperatorActionRow = z.infer<typeof operatorActionRow>;

@@ -10,6 +10,9 @@ import {
   INTENT_ACTION,
   INTENT_SIDE,
   type IntentRow,
+  type KillSwitchRow,
+  OPERATOR_ACTION_KIND,
+  type OperatorActionRow,
   type OutcomeRow,
   POLICY_DECISION,
   POLICY_SEVERITY,
@@ -21,6 +24,7 @@ import {
   STRATEGY_KIND,
 } from '../db/schema';
 import type { LeaderboardRow } from '../db/repos/leaderboard';
+import type { AttackInjectionResult } from '../operator/inject-attack';
 
 /**
  * Stable, versioned response DTOs for the read API and the pure mappers that
@@ -316,3 +320,88 @@ export const agentDetailDto = z.object({
   outcomes: z.array(outcomeDto),
 });
 export type AgentDetailDto = z.infer<typeof agentDetailDto>;
+
+// --- Operator console (P2.4) ------------------------------------------------
+/** The global kill switch as the operator console renders it. */
+export const killSwitchDto = z.object({
+  active: z.boolean(),
+  reason: z.string().nullable(),
+  set_by: z.string().nullable(),
+  updated_at: isoTime.nullable(),
+});
+export type KillSwitchDto = z.infer<typeof killSwitchDto>;
+
+/**
+ * Map the kill-switch singleton to its DTO. A `null` row (no toggle has ever
+ * been written) is the fail-open default: inactive, no reason.
+ */
+export function toKillSwitchDto(row: KillSwitchRow | null): KillSwitchDto {
+  return {
+    active: row?.active ?? false,
+    reason: row?.reason ?? null,
+    set_by: row?.set_by ?? null,
+    updated_at: row === null ? null : iso(row.updated_at),
+  };
+}
+
+/** One row of the operator audit feed. */
+export const operatorActionDto = z.object({
+  id: z.string().uuid(),
+  kind: z.enum(OPERATOR_ACTION_KIND),
+  actor: z.string(),
+  agent_id: z.string().uuid().nullable(),
+  detail: z.unknown(),
+  created_at: isoTime,
+});
+export type OperatorActionDto = z.infer<typeof operatorActionDto>;
+
+export function toOperatorActionDto(a: OperatorActionRow): OperatorActionDto {
+  return {
+    id: a.id,
+    kind: a.kind,
+    actor: a.actor,
+    agent_id: a.agent_id,
+    detail: a.detail_json,
+    created_at: iso(a.created_at),
+  };
+}
+
+/** The console's full hydration payload (auth-gated). */
+export const operatorStateDto = z.object({
+  kill_switch: killSwitchDto,
+  agents: z.array(leaderboardEntryDto),
+  capital_unit: z.string(),
+  round: roundDto.nullable(),
+  recent_actions: z.array(operatorActionDto),
+});
+export type OperatorStateDto = z.infer<typeof operatorStateDto>;
+
+/** The result of a scripted-attack injection, returned to the console. */
+export const attackResultDto = z.object({
+  /** REJECT (the drain block) or HALT (a global/per-agent stop was active). */
+  decision: z.enum(POLICY_DECISION),
+  severity: z.enum(POLICY_SEVERITY),
+  rule_fired: z.string(),
+  /** The persisted Intent id, or `null` for an idempotent retry. */
+  intent_id: z.string().uuid().nullable(),
+  intent_hash: z.string(),
+  /** True when this click duplicated an earlier one (no new rows written). */
+  duplicate: z.boolean(),
+  /** The agent the drain targeted. */
+  target_agent_id: z.string().uuid(),
+  target_display_name: z.string(),
+});
+export type AttackResultDto = z.infer<typeof attackResultDto>;
+
+export function toAttackResultDto(r: AttackInjectionResult): AttackResultDto {
+  return {
+    decision: r.decision.decision,
+    severity: r.decision.severity,
+    rule_fired: r.decision.rule_fired,
+    intent_id: r.intentId,
+    intent_hash: r.intentHash,
+    duplicate: r.duplicate,
+    target_agent_id: r.target.leader.id,
+    target_display_name: r.target.leader.display_name,
+  };
+}

@@ -298,7 +298,15 @@ async function processAgentTick(
 
   const state: RefereeState = {
     killSwitch: round.killSwitch,
-    agent: { allocation, remaining_budget: allocation, drawdown: '0' },
+    agent: {
+      allocation,
+      remaining_budget: allocation,
+      drawdown: '0',
+      // An operator per-agent HALT cuts execution here too (rule #1b), mirroring
+      // the router's gate-out. Seed agents default to 'active', so the arc stays
+      // byte-identical unless an operator explicitly halts one.
+      halted: agentRow?.status === 'halted',
+    },
   };
   const decision = await runReferee({
     db,

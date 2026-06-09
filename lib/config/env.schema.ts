@@ -144,6 +144,15 @@ export const envSchema = z.object({
    * non-empty bounded string if present.
    */
   BYREAL_PERPS_CLI_PATH: z.string().trim().min(1).max(MAX_URL_LEN).optional(),
+  /**
+   * Shared operator-console bearer secret (P2.4). Secret. Optional and
+   * **fail-closed**: when unset the operator console and every mutating
+   * `/api/operator/*` route are disabled (403) — a deployment never exposes the
+   * kill-switch/attack controls without an explicitly configured token. A
+   * 24-char floor keeps a weak/guessable token from being accepted; the value is
+   * only ever compared in constant time and never logged or sent to the client.
+   */
+  OPERATOR_CONSOLE_TOKEN: z.string().trim().min(24).max(MAX_URL_LEN).optional(),
   /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
   GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
 });
