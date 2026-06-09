@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { route } from '@/lib/router/route';
 import type { PrevAllocation, RouterAgent, RouterConfig, RouterState } from '@/lib/router/types';
 
-import golden from '../fixtures/router-golden.json';
+import golden from '@/tests/fixtures/router-golden.json';
 
 /**
  * Golden regression for the capital router (§6.2): the deterministic demo arc

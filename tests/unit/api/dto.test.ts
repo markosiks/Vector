@@ -20,7 +20,7 @@ import {
   policyEventRowFixture,
   roundRowFixture,
   scoreRowFixture,
-} from '../fixtures/read-api-fixtures';
+} from '@/tests/fixtures/read-api-fixtures';
 
 /**
  * The DTO mappers are the read API's serialization boundary. The invariants that

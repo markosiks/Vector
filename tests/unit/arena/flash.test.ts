@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { selectFlashes, summarizeFlashes } from '@/lib/arena/flash';
-import { makePolicyEvent } from '../fixtures/arena-fixtures';
+import { makePolicyEvent } from '@/tests/fixtures/arena-fixtures';
 
 const EMPTY: ReadonlySet<string> = new Set();
 

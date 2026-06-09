@@ -6,7 +6,7 @@
  * github.com/erc-8004/erc-8004-contracts, `abis/ReputationRegistry.json`). That
  * JSON is the provenance record; this `as const` array is the *typed* surface
  * viem needs to infer argument and return types at the call sites. A unit test
- * (`tests/unit/chain.abi.test.ts`) asserts every entry here is a byte-faithful
+ * (`tests/unit/chain/abi.test.ts`) asserts every entry here is a byte-faithful
  * subset of the vendored JSON, so the two can never drift.
  *
  * Only read paths and the single write Vector issues (`giveFeedback`, P1.8) are
