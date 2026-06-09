@@ -105,7 +105,13 @@ describe('toAttackResultDto', () => {
     });
   });
 
-  test('an idempotent retry carries a null intent_id and duplicate=true', () => {
+  test('an idempotent retry carries the persisted intent_id and duplicate=true', () => {
+    const dto = toAttackResultDto({ ...base, duplicate: true });
+    expect(dto.intent_id).toBe('33333333-3333-3333-3333-333333333333');
+    expect(dto.duplicate).toBe(true);
+  });
+
+  test('a null intent_id (defensive case) maps to null', () => {
     const dto = toAttackResultDto({ ...base, intentId: null, duplicate: true });
     expect(dto.intent_id).toBeNull();
     expect(dto.duplicate).toBe(true);

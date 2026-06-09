@@ -3,7 +3,12 @@ import { ATTACKER_ADDRESS, SEED_TTL_HORIZON_MS } from '@/seed';
 import { getSeedAgent, resolveSeedSigner, type SeedAgent } from '@/lib/agents/seed';
 import { BadRequestError } from '@/lib/api/errors';
 import { getLatestRound } from '@/lib/db/repos/rounds';
-import { insertIntentReserving, type NewIntent } from '@/lib/db/repos/intents';
+import {
+  getIntentByAgentNonce,
+  insertIntentReserving,
+  type NewIntent,
+} from '@/lib/db/repos/intents';
+import { getPolicyEventByIntent } from '@/lib/db/repos/policy-events';
 import { listLeaderboard, type LeaderboardRow } from '@/lib/db/repos/leaderboard';
 import { readKillSwitchState } from '@/lib/db/repos/kill-switch';
 import type { Queryable } from '@/lib/db/types';
@@ -31,9 +36,12 @@ import { buildDrainIntent } from '@/lib/replay/attack';
  * Idempotency: the injected Intent's `nonce` is `op-attack:<idempotencyKey>`,
  * unique per operator click. The durable `intents_agent_nonce_unique` constraint
  * makes a retried/double-submitted click a no-op — the reserve loses the race and
- * returns `null`, so no second Intent, no second `policy_event` is written. The
- * decision is still reported (re-derived purely by the deterministic `evaluate`)
- * so a retry is transparent to the caller.
+ * returns `null`, so no second Intent, no second `policy_event` is written. A
+ * retry then reports the *persisted* Intent (its real id/hash) and its *recorded*
+ * decision, read back from the row that won. It must not re-derive them from a
+ * freshly built Intent: the rebuilt Intent carries a new wall-clock `ttl`, so its
+ * hash drifts between calls, and `evaluate` over the *current* state could report
+ * a decision (e.g. HALT after a later stop) that never happened to the original.
  */
 
 /** The leader the attack targets, resolved from the live leaderboard. */
@@ -52,7 +60,12 @@ export interface AttackTarget {
 export interface AttackInjectionResult {
   /** The referee's decision (REJECT/hard in the happy path; HALT under a stop). */
   readonly decision: RefereeResult;
-  /** The persisted Intent's id, or `null` when this was an idempotent retry. */
+  /**
+   * The persisted Intent's id. On an idempotent retry this is the id of the
+   * *original* reserved Intent (read back), so the response points at the real
+   * persisted row; `null` only in the defensive case where that row is not
+   * visible.
+   */
   readonly intentId: string | null;
   /** Canonical hash of the injected Intent (audit anchor). */
   readonly intentHash: string;
@@ -120,6 +133,50 @@ function drainIntentColumns(
 }
 
 /**
+ * Build the result for an idempotent retry by reading back the row that won the
+ * `(agent, nonce)` reservation. Reports the persisted Intent's id/hash and its
+ * recorded `policy_event` decision. Falls back to a pure re-evaluation only in
+ * the defensive cases where the persisted row or its event is not visible
+ * (which cannot happen normally — the Intent and its event commit in one
+ * transaction).
+ */
+async function duplicateResult(
+  db: Queryable,
+  target: AttackTarget,
+  nonce: string,
+  rebuiltHash: string,
+  reevaluate: () => RefereeResult,
+): Promise<AttackInjectionResult> {
+  const persisted = await getIntentByAgentNonce(db, target.leader.id, nonce);
+  if (persisted === null) {
+    return {
+      decision: reevaluate(),
+      intentId: null,
+      intentHash: rebuiltHash,
+      duplicate: true,
+      target,
+    };
+  }
+  const event = await getPolicyEventByIntent(db, persisted.id);
+  const decision: RefereeResult =
+    event === null
+      ? reevaluate()
+      : {
+          decision: event.decision,
+          severity: event.severity,
+          rule_fired: event.rule_fired,
+          detail: (event.detail_json as Record<string, unknown> | null) ?? {},
+        };
+  return {
+    decision,
+    intentId: persisted.id,
+    intentHash: persisted.intent_hash,
+    duplicate: true,
+    target,
+  };
+}
+
+/**
  * Inject the canonical drain against the current leader through the real
  * referee. The caller (the route) must pass a single-connection client and wrap
  * this in a transaction together with its audit write so the Intent, its
@@ -149,9 +206,10 @@ export async function injectScriptedAttack(args: InjectAttackArgs): Promise<Atta
     attackerAddress: ATTACKER_ADDRESS,
     size: target.allocation,
   });
+  const nonce = `op-attack:${idempotencyKey}`;
   const stamped = {
     ...unsigned,
-    nonce: `op-attack:${idempotencyKey}`,
+    nonce,
     ttl: new Date(now.getTime() + SEED_TTL_HORIZON_MS).toISOString(),
   };
   const signed = await signIntent(stamped, target.seed.privateKey);
@@ -177,16 +235,14 @@ export async function injectScriptedAttack(args: InjectAttackArgs): Promise<Atta
   );
 
   if (intentRow === null) {
-    // Idempotent retry: the (agent, nonce) is already reserved. Report the
-    // decision without writing a second Intent or `policy_event` — `evaluate` is
-    // pure, so the same inputs yield the same decision.
-    return {
-      decision: evaluate(validated.intent, state, CONFIG.policy),
-      intentId: null,
-      intentHash: validated.intent_hash,
-      duplicate: true,
-      target,
-    };
+    // Idempotent retry: the (agent, nonce) is already reserved by an earlier
+    // click. Report the *persisted* Intent and its *recorded* decision — never a
+    // freshly built one — so the response is truly idempotent (same key → same
+    // hash) and reflects what actually happened, independent of the current
+    // state or wall-clock.
+    return duplicateResult(db, target, nonce, validated.intent_hash, () =>
+      evaluate(validated.intent, state, CONFIG.policy),
+    );
   }
 
   const decision = await runReferee({
