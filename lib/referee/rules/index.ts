@@ -1,4 +1,5 @@
 import type { Rule } from '../types';
+import { agentHaltRule } from './agent-halt';
 import { drawdownBreakerRule } from './drawdown-breaker';
 import { killSwitchRule } from './kill-switch';
 import { leverageCapRule } from './leverage-cap';
@@ -24,18 +25,20 @@ import { transferBlockRule } from './transfer-block';
  * and the ordering tests.
  *
  * Blocking (terminal):
- *   1. kill switch            → HALT  (operator override, dominates everything)
- *   2. market whitelist       → REJECT/hard
- *   3. transfer block         → REJECT/hard   ← the drain block
- *   4. drawdown breaker       → HALT   (agent frozen for the round)
- *   5. spend cap (no budget)  → REJECT/soft
+ *   1.  kill switch           → HALT  (global operator override, dominates everything)
+ *   1b. per-agent halt        → HALT  (operator HALT of one agent, P2.4)
+ *   2.  market whitelist      → REJECT/hard
+ *   3.  transfer block        → REJECT/hard   ← the drain block
+ *   4.  drawdown breaker      → HALT   (agent frozen for the round)
+ *   5.  spend cap (no budget) → REJECT/soft
  * Clipping (accumulating, all soft):
- *   6. per-trade size cap     → clamp size → max_trade_size
- *   7. spend cap (over budget)→ clamp size → remaining_budget
- *   8. per-agent leverage cap → clamp leverage → max_leverage
+ *   6.  per-trade size cap    → clamp size → max_trade_size
+ *   7.  spend cap (over budget)→ clamp size → remaining_budget
+ *   8.  per-agent leverage cap → clamp leverage → max_leverage
  */
 export const BLOCKING_RULES: readonly Rule[] = [
   killSwitchRule,
+  agentHaltRule,
   marketWhitelistRule,
   transferBlockRule,
   drawdownBreakerRule,
@@ -45,6 +48,7 @@ export const BLOCKING_RULES: readonly Rule[] = [
 export const CLIPPING_RULES: readonly Rule[] = [sizeCapRule, spendCapClipRule, leverageCapRule];
 
 export {
+  agentHaltRule,
   drawdownBreakerRule,
   killSwitchRule,
   leverageCapRule,

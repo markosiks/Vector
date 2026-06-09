@@ -76,6 +76,31 @@ export async function updateAgentScore(
   return agentRow.parse(row);
 }
 
+/**
+ * Set an agent's operator-controlled {@link AgentStatus} (P2.4). This is the
+ * **operator** writer of `agents.status`, distinct from {@link updateAgentScore}
+ * (the scoring engine's writer, which preserves a `halted` status and never
+ * touches it). It writes only `status`, leaving `score_current` untouched, so a
+ * per-agent HALT/un-HALT is a pure control-plane action.
+ *
+ * Returns the updated row, or `null` when no agent matches `id` (a well-formed
+ * but unknown id — the route maps that to a 404 rather than throwing). The
+ * single `UPDATE` is atomic, so concurrent operator writes are last-writer-wins
+ * without a torn state.
+ */
+export async function setAgentStatus(
+  db: Queryable,
+  id: string,
+  status: AgentStatus,
+): Promise<AgentRow | null> {
+  const { rows } = await db.query('UPDATE agents SET status = $2 WHERE id = $1 RETURNING *', [
+    id,
+    status,
+  ]);
+  const row = rows[0];
+  return row === undefined ? null : agentRow.parse(row);
+}
+
 /** Leaderboard read: agents ordered by their denormalized current score. */
 export function listAgentsByScore(db: Queryable, limit = 100): Promise<AgentRow[]> {
   return selectMany(
