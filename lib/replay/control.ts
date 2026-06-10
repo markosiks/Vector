@@ -11,6 +11,16 @@
  * would back this with a shared store; that is out of scope for the spine.
  */
 
+/**
+ * An injectable attack latch. Scoping this to `RunArcOptions` keeps the
+ * module-level singleton correct for the single-process demo while enabling
+ * independent instances in tests and future multi-tenant deployments (R-03).
+ */
+export interface AttackLatch {
+  /** Atomically read-and-clear the latch; returns true if it was armed. */
+  consume(): boolean;
+}
+
 let armed = false;
 
 /** Arm the drain: the target agent's next processed tick becomes an attack. */
