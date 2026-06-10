@@ -41,3 +41,25 @@ describe('healthStatusCode', () => {
     expect(healthStatusCode('down')).toBe(503);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression tests for audit finding C-06
+// ---------------------------------------------------------------------------
+
+describe('buildHealthPayload — C-06: configLoaded is meaningful', () => {
+  test('defaults to true when configLoaded is omitted', () => {
+    expect(buildHealthPayload({ db: 'up', commit: 'abc' }).config_loaded).toBe(true);
+  });
+
+  test('reports false when configLoaded is explicitly false', () => {
+    expect(
+      buildHealthPayload({ db: 'up', commit: 'abc', configLoaded: false }).config_loaded,
+    ).toBe(false);
+  });
+
+  test('reports true even when db is down (config and db are independent)', () => {
+    expect(
+      buildHealthPayload({ db: 'down', commit: 'abc', configLoaded: true }).config_loaded,
+    ).toBe(true);
+  });
+});
