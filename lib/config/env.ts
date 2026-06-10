@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { deepFreeze } from '@/lib/utils/deep-freeze';
 import { parseEnv, type Env } from './env.schema';
 
 /**
@@ -10,6 +11,6 @@ import { parseEnv, type Env } from './env.schema';
  * import, so a missing or malformed required variable crashes the server at
  * startup with a redacted message rather than failing deep inside a request.
  */
-export const ENV: Env = parseEnv(process.env);
+export const ENV: Env = deepFreeze(parseEnv(process.env)) as Env;
 
 export type { Env } from './env.schema';
