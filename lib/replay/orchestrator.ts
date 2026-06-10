@@ -23,7 +23,7 @@ import type { ScoreInputs, ScoreResult } from '@/lib/scoring/types';
 import type { DemoArc } from '@/seed';
 
 import { composeIntent } from './compose';
-import { consumeAttackArm } from './control';
+import { consumeAttackArm, type AttackLatch } from './control';
 import { planTicks, roundCount, tickInstantMs, type SchedulerTiming } from './scheduler';
 import { createSeedRail, settleWithFallback, type Rail } from './rail';
 import { ensureRound, setupArc, type ArcSetup } from './setup';
@@ -143,6 +143,14 @@ export interface RunArcOptions {
    */
   readonly elfa?: ElfaSignalProvider;
   readonly hooks?: RunArcHooks;
+  /**
+   * Optional attack latch for testing or multi-tenant isolation (R-03). When
+   * absent, the module-level singleton from `control.ts` is used — the correct
+   * behaviour for the single-process demo. In tests, pass a fresh
+   * `AttackLatch`-shaped object per `runArc` call to avoid global state
+   * pollution without needing `resetAttackArm()` discipline.
+   */
+  readonly attackLatch?: AttackLatch;
 }
 
 /** A settled allocation, keyed by the stable seed `agent_id`. */
@@ -335,7 +343,7 @@ async function processAgentTick(
   const seedOutcome = arc.outcomes[agentId]?.[tick.index];
   if (seedOutcome === undefined) return;
   const executed = decision.modified_intent ?? validated.intent;
-  const { fill } = await settleWithFallback(
+  const { fill, degraded } = await settleWithFallback(
     rail,
     { intent: executed, agentId, tickIndex: tick.index },
     {
@@ -344,6 +352,13 @@ async function processAgentTick(
       rail_order_id: `seed-${agentId}-${tick.index}`,
     },
   );
+  // R-02: surface live-rail degradation so operator dashboards can detect
+  // prolonged outages instead of silently serving seed-frozen fills.
+  if (degraded) {
+    console.warn(
+      `[seed-rail] degraded to seed fill for agent=${agentId} tick=${tick.index}: live rail failed`,
+    );
+  }
 
   const execution = await insertExecution(db, {
     intent_id: intentRow.id,
@@ -536,6 +551,15 @@ export async function runArc(
   options: RunArcOptions = {},
 ): Promise<RunArcResult> {
   assertDedicatedClient(db);
+  // R-05: fail fast on malformed arcs where ticks array is shorter than
+  // totalTicks — otherwise `arc.ticks[tick.index]?.markets ?? {}` would silently
+  // yield empty market maps, producing meaningless but accepted Intents.
+  if (arc.ticks.length !== arc.totalTicks) {
+    throw new RangeError(
+      `runArc: arc.ticks.length (${arc.ticks.length}) !== arc.totalTicks (${arc.totalTicks}): ` +
+        'ticks array must have exactly one entry per tick',
+    );
+  }
   const timing = options.timing ?? CONFIG.timing;
   const validate: ValidateOptions = { resolveSigner: resolveSeedSigner, ...options.validate };
   const rail =
@@ -568,14 +592,25 @@ export async function runArc(
     // Fire-and-forget: may start a detached Nansen/Elfa refresh on its slow
     // cadence. Never awaited — the tick must not block on the network (P2.2/P3.1
     // invariant). Elfa's `maybeRefresh` is a no-op in mock mode.
+    // Provider contract (R-07): `maybeRefresh` MUST NOT propagate errors — it
+    // must swallow them internally (as the current providers do via `runFetch`).
+    // A future signal provider that lets `runFetch` throw synchronously would
+    // corrupt the tick path; review any new provider before registering it here.
     options.nansen?.maybeRefresh(tick.index);
     options.elfa?.maybeRefresh(tick.index);
 
+    // Resolve the latch once per tick loop; fall back to the module singleton.
+    const latch = options.attackLatch ?? { consume: consumeAttackArm };
     for (const agent of SEED_AGENTS) {
       const uuid = setup.agentsBySeedId.get(agent.id)?.id;
       if (uuid === undefined) continue;
       const scripted = tick.index === arc.attack.atTick && agent.id === arc.attack.targetAgentId;
-      const armed = !scripted && agent.id === arc.attack.targetAgentId && consumeAttackArm();
+      // R-01: unconditionally drain the latch at the scripted tick so it cannot
+      // survive and fire a second drain on the very next tick (the double-fire
+      // bug: the old `!scripted && … && consumeAttackArm()` short-circuit left
+      // the latch set when `scripted===true`).
+      if (scripted && agent.id === arc.attack.targetAgentId) latch.consume();
+      const armed = !scripted && agent.id === arc.attack.targetAgentId && latch.consume();
       await processAgentTick(
         db,
         arc,
