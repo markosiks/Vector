@@ -31,14 +31,14 @@ const SEED_FILL: RailFill = { status: 'filled', outcome: OUTCOME, rail_order_id:
 describe('createSeedRail', () => {
   test('returns the frozen fill for the requested (agent, tick)', async () => {
     const rail = createSeedRail(() => OUTCOME);
-    const fill = await rail.execute({ intent: {} as never, agentId: 'a', tickIndex: 3 });
+    const fill = await rail.execute({ intent: {} as never, agentId: 'a', tickIndex: 3, intentHash: 'h' });
     expect(fill?.outcome).toEqual(OUTCOME);
     expect(fill?.status).toBe('filled');
   });
 });
 
 describe('settleWithFallback', () => {
-  const req = { intent: {} as never, agentId: 'a', tickIndex: 0 };
+  const req = { intent: {} as never, agentId: 'a', tickIndex: 0, intentHash: 'h' };
 
   test('uses the seed fill when no rail is provided', async () => {
     expect(await settleWithFallback(undefined, req, SEED_FILL)).toEqual({

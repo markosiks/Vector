@@ -11,8 +11,13 @@ import { z } from 'zod';
  * colour codes, a truncated/garbage payload, or a pathologically large blob.
  */
 
-/** Maximum stdout we will attempt to parse — bounds memory on a runaway CLI. */
-const MAX_OUTPUT_BYTES = 1_000_000;
+/**
+ * Maximum stdout we will attempt to parse — bounds memory on a runaway CLI.
+ * B-05: kept as 1 MiB (1_024 * 1_024) to match cli.ts's DEFAULT_MAX_OUTPUT_BYTES
+ * so there is no gap where output escapes the parse-rejection threshold but not
+ * the process-kill cap.
+ */
+const MAX_OUTPUT_BYTES = 1_024 * 1_024;
 
 /** A deterministic parse failure: the CLI output is not a usable envelope. */
 export class ByrealParseError extends Error {
