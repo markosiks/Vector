@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { getAddress, recoverMessageAddress, type Address } from 'viem';
 
 import { canonicalPayload } from './canonical';
@@ -41,8 +43,16 @@ export async function verifyIntentSignature(
   }
   try {
     const recovered = await recoverIntentSigner(intent);
-    return getAddress(recovered) === expected;
-  } catch {
+    // Constant-time address comparison (I-05): use timingSafeEqual on the
+    // ASCII bytes of the checksum-normalised address strings. Both are exactly
+    // 42 characters (`0x` + 40 hex), so the buffers are always the same length.
+    const recoveredBuf = Buffer.from(getAddress(recovered));
+    const expectedBuf = Buffer.from(expected);
+    return timingSafeEqual(recoveredBuf, expectedBuf);
+  } catch (err) {
+    // Log the error name (not the full object) to surface genuine programming
+    // errors without leaking internals (I-02).
+    console.error('[intent/verify] unexpected error', err instanceof Error ? err.name : 'unknown');
     return false;
   }
 }
