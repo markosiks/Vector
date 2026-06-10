@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { formatCapital, formatScore, truncateName, type AgentView } from '@/lib/arena';
@@ -48,6 +49,11 @@ export function AgentRow({
 
   return (
     <li className={rowClass} data-flip-key={agent.id} data-testid="agent-row">
+      <Link
+        href={`/agents/${agent.id}`}
+        className={styles.rowLink}
+        aria-label={`Open ${agent.displayName} agent detail`}
+      />
       <span className={styles.rank}>{agent.rank + 1}</span>
 
       <span className={styles.identity}>
