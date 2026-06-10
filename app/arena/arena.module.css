@@ -82,6 +82,7 @@
 }
 
 .row {
+  position: relative;
   display: grid;
   grid-template-columns: 3ch minmax(8rem, 1.4fr) 2.6fr minmax(7rem, auto);
   align-items: center;
@@ -92,6 +93,24 @@
   border-radius: 14px;
   transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
+}
+
+.row:hover {
+  border-color: color-mix(in srgb, var(--bar) 55%, var(--edge));
+}
+
+/* Full-row click target to the agent-detail screen. An overlay (not a wrapper)
+ * so the row's grid, FLIP transform, and flash styling stay untouched. */
+.rowLink {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 14px;
+}
+
+.rowLink:focus-visible {
+  outline: 2px solid var(--bar);
+  outline-offset: 2px;
 }
 
 .leaderRow {

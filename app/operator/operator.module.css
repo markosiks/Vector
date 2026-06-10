@@ -251,6 +251,7 @@
 }
 
 .loginCard {
+  box-sizing: border-box;
   width: min(26rem, 92vw);
   background: var(--panel);
   border: 1px solid var(--edge);

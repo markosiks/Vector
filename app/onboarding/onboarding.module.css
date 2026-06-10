@@ -108,6 +108,8 @@
   border-radius: 4px;
   padding: 0.05em 0.4em;
   color: #cfe0ff;
+  /* Long unbreakable tokens (addresses, hashes) must wrap, not widen the page. */
+  overflow-wrap: anywhere;
 }
 
 .code {

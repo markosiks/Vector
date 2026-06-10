@@ -59,6 +59,7 @@
 
 .filters {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   padding: 0.3rem;
   background: var(--panel-2);
@@ -214,6 +215,14 @@
   letter-spacing: 0.03em;
   border: 1px solid transparent;
   white-space: nowrap;
+}
+
+/* On narrow phones the qualified badge ("Optimistic · chain silent") must wrap
+ * inside the row instead of widening the page. */
+@media (max-width: 480px) {
+  .badge {
+    white-space: normal;
+  }
 }
 
 .badgeDot {

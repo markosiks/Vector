@@ -1,0 +1,25 @@
+/*
+ * Global base layer. Each screen module still owns its full palette; this only
+ * pins the document itself to the shared dark theme so route transitions,
+ * overscroll, and chrome-less pages (errors, 404) never flash white.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: #0a0e17;
+  color: #e8eef9;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
