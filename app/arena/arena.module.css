@@ -252,18 +252,28 @@
 }
 
 .flashBanner {
+  /* Permanent live-region wrapper — no visual styling so an empty region is
+   * invisible. Visual styling lives on .flashBannerInner so the CSS animation
+   * can be replayed by keying the inner element without remounting this
+   * aria-live div. */
   position: fixed;
   top: clamp(0.8rem, 2vw, 1.6rem);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 51;
+  pointer-events: none;
+}
+
+.flashBannerInner {
+  display: block;
   padding: 0.5em 1.2em;
   background: var(--flash);
   color: #fff;
   font-weight: 800;
   letter-spacing: 0.04em;
   border-radius: 999px;
-  z-index: 51;
   box-shadow: 0 8px 30px color-mix(in srgb, var(--flash) 50%, transparent);
+  pointer-events: none;
 }
 
 .states {

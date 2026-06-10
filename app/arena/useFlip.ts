@@ -28,6 +28,9 @@ export function useFlip(
     if (container === null) return;
     const rows = container.querySelectorAll<HTMLElement>('[data-flip-key]');
     const next = new Map<string, number>();
+    // Collect rAF handles so we can cancel them if the component unmounts
+    // before the next paint (F2: avoids detached-DOM style writes).
+    const rafIds: number[] = [];
 
     rows.forEach((row) => {
       const key = row.dataset.flipKey;
@@ -43,13 +46,20 @@ export function useFlip(
       row.style.transition = 'none';
       row.style.transform = `translateY(${dy}px)`;
       // …then, next frame, release it so CSS eases it to its real spot.
-      requestAnimationFrame(() => {
+      const id = requestAnimationFrame(() => {
         row.style.transition = '';
         row.style.transform = '';
       });
+      rafIds.push(id);
     });
 
     positions.current = next;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+
+    // Cleanup: cancel any pending rAF callbacks if the component unmounts or
+    // the effect re-runs before the next paint (F2).
+    return () => {
+      for (const id of rafIds) cancelAnimationFrame(id);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- containerRef is a stable ref object; deps is an opaque caller-controlled array (spread is intentional)
+  }, [...deps, reducedMotion]); // F3: reducedMotion in deps so a preference change mid-session takes effect immediately
 }
