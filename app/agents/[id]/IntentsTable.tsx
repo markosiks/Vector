@@ -7,10 +7,10 @@ import { EMPTY } from '@/lib/arena/format';
 import styles from './agent-detail.module.css';
 
 const TONE_CLASS = {
-  ok: styles.decOk!,
-  warn: styles.decWarn!,
-  danger: styles.decDanger!,
-  critical: styles.decCritical!,
+  ok: styles.decOk ?? '',
+  warn: styles.decWarn ?? '',
+  danger: styles.decDanger ?? '',
+  critical: styles.decCritical ?? '',
 };
 
 export interface IntentsTableProps {

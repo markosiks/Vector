@@ -7,9 +7,9 @@ import styles from './arena.module.css';
 
 /** Map an agent status to its pill class. */
 const STATUS_CLASS: Record<AgentView['status'], string> = {
-  active: styles.statusActive!,
-  gated: styles.statusGated!,
-  halted: styles.statusHalted!,
+  active: styles.statusActive ?? '',
+  gated: styles.statusGated ?? '',
+  halted: styles.statusHalted ?? '',
 };
 
 export interface AgentRowProps {
