@@ -52,6 +52,12 @@ function quantize(value: number, scale: number): string {
   return (value + 0).toFixed(scale);
 }
 
+/** Decimal scale for `raw_r` (stored as `numeric(12, 8)` in `scores`). */
+const RAW_SCALE = 8;
+
+/** Decimal scale for `score_r` (stored as `numeric(6, 3)` in `scores`). */
+const SCORE_SCALE = 3;
+
 /** Round a component to a stable precision so `components_json` carries no float drift. */
 function round8(value: number): number {
   return Number((value + 0).toFixed(8));
@@ -122,10 +128,12 @@ export function score(inputs: ScoreInputs, prevScore: number, config: ScoringCon
   // capital exposure enters, which is what resists Sybil and wash trading.
   const w = car_r / (car_r + c_floor);
 
-  // 4 — Policy term (points). A clean round (zero `hard`) earns `b_clean`;
-  // every violation subtracts its severity-weighted penalty. `p_hard`/`p_halt`
-  // dominate any positive performance by construction.
-  const clean = hard === 0;
+  // 4 — Policy term (points). A clean round (zero `hard` AND zero `halt`) earns
+  // `b_clean`; every violation subtracts its severity-weighted penalty.
+  // `p_hard`/`p_halt` dominate any positive performance by construction.
+  // S3 fix: a halt round must not receive the clean bonus — the effective halt
+  // penalty should be p_halt (60), not p_halt − b_clean (55).
+  const clean = hard === 0 && halt === 0;
   const policy = (clean ? b_clean : 0) - p_soft * soft - p_hard * hard - p_halt * halt;
 
   // 5 — Drawdown penalty (points), applied only beyond the tolerance band.
@@ -150,8 +158,8 @@ export function score(inputs: ScoreInputs, prevScore: number, config: ScoringCon
   };
 
   return {
-    raw_r: quantize(raw, 8),
-    score_r: quantize(scoreR, 3),
+    raw_r: quantize(raw, RAW_SCALE),
+    score_r: quantize(scoreR, SCORE_SCALE),
     crashed,
     components,
   };

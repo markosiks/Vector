@@ -109,9 +109,14 @@ describe('score — step 4 & 5: policy and drawdown penalties', () => {
     expect(Number(hard.score_r)).toBeGreaterThan(C.crash_cap);
   });
 
-  test('clean bonus is awarded iff zero hard (soft does not break clean)', () => {
+  test('clean bonus is awarded iff zero hard AND zero halt (soft does not break clean)', () => {
+    // Soft violations don't break clean — b_clean is still awarded.
     expect(score(round({ soft: 2 }), 50, C).components.policy).toBe(C.b_clean - 2 * C.p_soft);
+    // A hard violation removes the clean bonus.
     expect(score(round({ hard: 1 }), 50, C).components.policy).toBe(-C.p_hard);
+    // S3 fix: a halt violation must also remove the clean bonus so effective
+    // halt penalty is p_halt (60), not p_halt − b_clean (55).
+    expect(score(round({ halt: 1 }), 50, C).components.policy).toBe(-C.p_halt);
   });
 
   test('drawdown penalty is zero within tolerance and grows beyond it', () => {
