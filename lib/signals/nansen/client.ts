@@ -59,7 +59,20 @@ export class NansenRateLimitError extends NansenClientError {
   }
 }
 
-/** Nansen returned a non-2xx, non-429 status. */
+/**
+ * Nansen returned `402 Payment Required` — the subscription/quota is exhausted
+ * or the API key is not entitled to this endpoint. Modeled distinctly from a
+ * generic HTTP error so observability can distinguish "credit/payment" issues
+ * from "server fault"; both still degrade fail-open.
+ */
+export class NansenPaymentRequiredError extends NansenClientError {
+  constructor() {
+    super('nansen requires payment (HTTP 402)');
+    this.name = 'NansenPaymentRequiredError';
+  }
+}
+
+/** Nansen returned a non-2xx, non-429, non-402 status. */
 export class NansenHttpError extends NansenClientError {
   constructor(public readonly status: number) {
     super(`nansen responded with HTTP ${status}`);
@@ -131,7 +144,6 @@ const netflowRowSchema = z
     netflowUsd: numericString.optional(),
     netflow_usd: numericString.optional(),
     netflow: numericString.optional(),
-    volumeUsd: numericString.optional(),
   })
   .passthrough();
 
@@ -152,7 +164,7 @@ function normalizeRow(raw: unknown): NansenNetflow | null {
   const parsed = netflowRowSchema.safeParse(raw);
   if (!parsed.success) return null;
   const r = parsed.data;
-  const netflowUsd = r.netflowUsd ?? r.netflow_usd ?? r.netflow ?? r.volumeUsd;
+  const netflowUsd = r.netflowUsd ?? r.netflow_usd ?? r.netflow;
   if (netflowUsd === undefined) return null; // No usable signal value: drop the row.
 
   const chain = r.chain;
@@ -231,6 +243,7 @@ export function createNansenClient(deps: NansenClientDeps): NansenClient {
         // could resend the `apiKey` header to an attacker-controlled origin.
         redirect: 'error',
         headers: {
+          accept: 'application/json',
           'content-type': 'application/json',
           // Secret lives only in this header, for this request. Never logged.
           apiKey: deps.apiKey,
@@ -242,6 +255,7 @@ export function createNansenClient(deps: NansenClientDeps): NansenClient {
       if (res.status === 429) {
         throw new NansenRateLimitError(parseRetryAfterMs(res.headers.get('retry-after')));
       }
+      if (res.status === 402) throw new NansenPaymentRequiredError();
       if (!res.ok) throw new NansenHttpError(res.status);
 
       const payload = await readJsonBounded(res);

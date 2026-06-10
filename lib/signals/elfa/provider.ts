@@ -1,3 +1,4 @@
+import { ElfaRateLimitError } from './client';
 import type { ElfaClient } from './client';
 import type { ElfaLogger, ElfaSignal, ElfaSignalProvider } from './types';
 
@@ -78,6 +79,8 @@ export function createElfaSignalProvider(deps: ElfaProviderDeps): ElfaSignalProv
   let lastPollTick: number | undefined;
   let calls = 0;
   let budgetExhaustedLogged = false;
+  /** Earliest wall-clock instant at which the cadence gate may fire again (rate-limit backoff). */
+  let rateLimitUntilMs = 0;
 
   /**
    * Emit one observability event. The logger is caller-supplied and may throw
@@ -102,8 +105,9 @@ export function createElfaSignalProvider(deps: ElfaProviderDeps): ElfaSignalProv
     return deps.client === undefined ? 'mock' : 'live';
   }
 
-  /** Is the cadence due for `tickIndex`? First tick is always due. */
+  /** Is the cadence due for `tickIndex`? First tick is always due. Respects rate-limit backoff. */
   function cadenceDue(tickIndex: number): boolean {
+    if (now() < rateLimitUntilMs) return false; // still in Retry-After window
     return lastPollTick === undefined || tickIndex - lastPollTick >= deps.pollEveryNTicks;
   }
 
@@ -129,6 +133,11 @@ export function createElfaSignalProvider(deps: ElfaProviderDeps): ElfaSignalProv
       // Fail-open: keep the last good value (live or mock); surface a redacted reason.
       // `errorName` is total — this catch must never throw (the fetch is detached,
       // so a throw here would become an unhandled rejection).
+      if (err instanceof ElfaRateLimitError && err.retryAfterMs !== undefined) {
+        // Respect the upstream's Retry-After: block the cadence gate until the
+        // requested backoff has elapsed, so we don't burn credits re-polling.
+        rateLimitUntilMs = now() + err.retryAfterMs;
+      }
       log({
         type: 'fetch_error',
         endpoint: endpointLabel,
