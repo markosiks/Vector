@@ -35,8 +35,11 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from '@neondatabase/serverless';
 
 import { loadMigrations, migrate, MIGRATIONS_DIR } from '@/lib/db/migrate';
+import { toQueryable } from '@/lib/db/client';
 import { runArc, setupArc } from '@/lib/replay';
-import type { Queryable } from '@/lib/db/types';
+import { mirrorAttestation } from '@/lib/attestation/pipeline';
+import { submitAndReconcile } from '@/lib/attestation/pipeline';
+import { getAttestorAddress, getFeedbackWriteClient, getIdentityReader, getReceiptReader } from '@/lib/chain/client';
 import { buildDemoArc } from '@/seed';
 
 const PORT = Number(process.env.ARENA_LIVE_PORT ?? 3100);
@@ -99,7 +102,7 @@ async function main(): Promise<number> {
   const url = schemaUrl(base, schema);
   const pool = new Pool({ connectionString: url });
   const client = await pool.connect();
-  const db = client as unknown as Queryable;
+  const db = toQueryable(client);
 
   let dev: ChildProcess | undefined;
   let arc: Promise<unknown> | undefined;
@@ -147,6 +150,39 @@ async function main(): Promise<number> {
       if (!go) return;
       await runArc(db, demoArc, {
         hooks: {
+          onAttest: async (event) => {
+            // Mirror the scored round into an optimistic attestation row,
+            // atomic with the settle transaction (A-01 / P1.8).
+            const mirror = await mirrorAttestation(event.db, {
+              agent: event.agent,
+              roundId: event.roundId,
+              result: event.result,
+              inputs: event.inputs,
+              outcomes: event.outcomes,
+              policyEvents: event.policyEvents,
+            });
+            // Queue the on-chain write *after* the settle transaction commits
+            // (chain latency must never block the arc).  Fire-and-forget with
+            // error logging — a chain failure leaves the row `optimistic` for
+            // the sweep (A-02).
+            const { attestationId } = { attestationId: mirror.attestation.id };
+            const agentOnchainId = event.agent.onchainId;
+            Promise.resolve().then(() =>
+              submitAndReconcile(
+                {
+                  db,
+                  writer: getFeedbackWriteClient(),
+                  reader: getIdentityReader(),
+                  attestor: getAttestorAddress(),
+                  baseUrl: process.env.PUBLIC_BASE_URL ?? BASE_URL,
+                },
+                { receipts: getReceiptReader() },
+                { attestationId, agentOnchainId },
+              ).catch((err: unknown) => {
+                console.error('[arena-live] submitAndReconcile failed:', err);
+              }),
+            );
+          },
           onTick: async ({ isRoundSettle }) => {
             if (isRoundSettle) await sleep(SETTLE_PACE_MS);
           },

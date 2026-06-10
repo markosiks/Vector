@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { encodeAbiParameters, encodeEventTopics, type Address, type Hex } from 'viem';
 
 import { identityRegistryAbi } from '@/lib/chain/abi';
@@ -7,6 +7,7 @@ import {
   assertCanAttest,
   IdentityError,
   registerAgent,
+  resetOwnerOfCacheForTest,
   type IdentityReader,
   type IdentityWriteClient,
   type RegisterReceipt,
@@ -39,6 +40,9 @@ describe('agentExists', () => {
 });
 
 describe('assertCanAttest (two-key guard)', () => {
+  // The ownerOf cache is process-scoped; clear it so each test starts fresh.
+  afterEach(() => resetOwnerOfCacheForTest());
+
   test('passes when a distinct attestor attests a registered agent', async () => {
     const reader = fakeReader({ '1': OWNER });
     await expect(assertCanAttest(reader, ATTESTOR, 1n)).resolves.toBeUndefined();

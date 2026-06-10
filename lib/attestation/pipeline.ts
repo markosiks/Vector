@@ -115,9 +115,7 @@ export async function mirrorAttestation(db: Queryable, facts: MirrorFacts): Prom
   // Conflict: an attestation already exists for this (agent, round). Re-read it.
   const existing = await getAttestationByAgentRound(db, facts.agent.uuid, facts.roundId);
   if (existing === null) {
-    throw new Error(
-      `mirrorAttestation: row vanished for agent ${facts.agent.uuid} round ${facts.roundId}`,
-    );
+    throw new Error('mirrorAttestation: row vanished after conflict — concurrent delete?');
   }
   return { attestation: existing, created: false };
 }
@@ -130,24 +128,58 @@ export interface SubmitAndReconcileResult {
 }
 
 /**
+ * Process-scoped in-flight map for {@link submitAndReconcile}. Keyed by
+ * `attestationId`. When two concurrent callers race, the second caller waits on
+ * the first's promise instead of launching its own `giveFeedback` — this is the
+ * "in-process coalescing" the submit layer comment promises (A-03). The entry is
+ * deleted once the promise settles, so the next independent call (e.g. a retry
+ * after a process restart) goes through normally.
+ */
+const inFlight = new Map<string, Promise<SubmitAndReconcileResult>>();
+
+/**
  * Run the post-commit half for one attestation: submit the single `giveFeedback`
  * then watch its receipt. Idempotent end to end — a replay short-circuits in
  * {@link submitAttestation} and still reconciles the already-submitted tx. The
  * two dependency bundles are the DI seams the live adapter binds to real viem
  * clients and tests bind to fakes.
+ *
+ * Concurrent calls for the **same** `attestationId` are coalesced: the second
+ * caller shares the first's result without sending a duplicate `giveFeedback`
+ * (A-03).
  */
-export async function submitAndReconcile(
+export function submitAndReconcile(
   submitDeps: SubmitDeps,
   reconcileDeps: Omit<ReconcileDeps, 'db'>,
   params: { readonly attestationId: string; readonly agentOnchainId: string | null },
 ): Promise<SubmitAndReconcileResult> {
-  const submit = await submitAttestation(submitDeps, {
-    attestationId: params.attestationId,
-    agentOnchainId: params.agentOnchainId,
+  const { attestationId } = params;
+  const existing = inFlight.get(attestationId);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const work = (async (): Promise<SubmitAndReconcileResult> => {
+    const submit = await submitAttestation(submitDeps, {
+      attestationId,
+      agentOnchainId: params.agentOnchainId,
+    });
+    const reconcileResult = await reconcile(
+      { db: submitDeps.db, ...reconcileDeps },
+      attestationId,
+    );
+    return { submit, reconcile: reconcileResult };
+  })();
+  inFlight.set(attestationId, work);
+  work.finally(() => {
+    inFlight.delete(attestationId);
   });
-  const reconcileResult = await reconcile(
-    { db: submitDeps.db, ...reconcileDeps },
-    params.attestationId,
-  );
-  return { submit, reconcile: reconcileResult };
+  return work;
+}
+
+/**
+ * Clear the in-flight coalescing map. **Test-only**: allows independent test
+ * cases to start with a clean slate. Not for production use.
+ */
+export function resetInFlightForTest(): void {
+  inFlight.clear();
 }
