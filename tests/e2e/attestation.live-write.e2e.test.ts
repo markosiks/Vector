@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import { keccak256, toBytes } from 'viem';
 
 import { CONFIG } from '@/lib/config/constants';
@@ -63,14 +63,32 @@ async function waitFor<T>(
 }
 
 // `ENV` is a single eager global that requires DATABASE_URL even though the
-// chain write path never touches Postgres. Supply a syntactically valid
-// placeholder so importing the chain client doesn't fail env validation.
-process.env.DATABASE_URL ??= 'postgres://placeholder:5432/vector_test';
+// chain write path never touches Postgres. The gated test below supplies a
+// syntactically valid placeholder so importing the chain client doesn't fail
+// env validation.
+//
+// This MUST NOT be a bare top-level assignment. Under `bun test` every file in
+// the run shares one process and Bun evaluates all files' top-level code in a
+// single collection pass *before* any test or hook runs. A top-level write here
+// would still be set when later files are collected, flipping peers that gate
+// on `DATABASE_URL` at import — e.g. `tests/e2e/data-model.e2e.test.ts`'s
+// `hasDb` const, which selects `describe` vs `describe.skip` for the real-Neon
+// migration suite. Those tests would then connect to a placeholder Postgres and
+// fail instead of skipping without a real DB. Confining the write to
+// `beforeAll`/`afterAll` (execution phase) keeps the collection-time env clean.
+let prevDbUrl: string | undefined;
 
 mock.module('server-only', () => ({}));
 
 describeLive('ERC-8004 feedback write path (live Mantle Sepolia, funded wallets)', () => {
+  beforeAll(() => {
+    prevDbUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL ??= 'postgres://placeholder:5432/vector_test';
+  });
+
   afterAll(() => {
+    if (prevDbUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDbUrl;
     mock.restore();
   });
 
