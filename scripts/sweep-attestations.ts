@@ -58,6 +58,21 @@ function toDto(row: { chain_state: string; created_at: Date }): Pick<Attestation
 const now = new Date();
 const stuck = rows.filter((r) => isStuckOptimistic(toDto(r), now, STUCK_OPTIMISTIC_MS));
 
+// `submitAttestation` fails closed on a null/malformed on-chain id, so resolve
+// the CURRENT `agents.agent_id_onchain` for every stuck row up front (an agent
+// may have been registered long after its attestation row was mirrored).
+const onchainIds = new Map<string, string | null>();
+if (stuck.length > 0) {
+  const agentIds = [...new Set(stuck.map((r) => r.agent_id))];
+  const res = await db.query<{ id: string; agent_id_onchain: string | null }>(
+    'SELECT id, agent_id_onchain FROM agents WHERE id = ANY($1)',
+    [agentIds],
+  );
+  for (const a of res.rows) {
+    onchainIds.set(a.id, a.agent_id_onchain);
+  }
+}
+
 console.log(`[sweep] ${rows.length} optimistic row(s), ${stuck.length} stuck (>${STUCK_OPTIMISTIC_MS}ms old).`);
 
 let ok = 0;
@@ -74,7 +89,7 @@ for (const row of stuck) {
         baseUrl: BASE_URL,
       },
       { receipts: getReceiptReader() },
-      { attestationId: row.id, agentOnchainId: null /* fetched from row via DB */ },
+      { attestationId: row.id, agentOnchainId: onchainIds.get(row.agent_id) ?? null },
     );
     console.log(`[sweep] ${row.id}: submit=${result.submit.status} reconcile=${result.reconcile?.status ?? 'n/a'}`);
     ok += 1;
