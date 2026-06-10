@@ -29,7 +29,10 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
       value={{
         fetcher,
         refreshInterval: CONFIG.timing.ui_poll_ms,
-        dedupingInterval: CONFIG.timing.ui_poll_ms,
+        // Set dedup window to half the poll interval so there is always a safe
+        // gap between a fetch completing and the next refresh window — avoids a
+        // missed poll when a fetch takes close to ui_poll_ms (F6).
+        dedupingInterval: Math.floor(CONFIG.timing.ui_poll_ms / 2),
         revalidateOnFocus: false,
       }}
     >
