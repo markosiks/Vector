@@ -15,7 +15,10 @@ import { BadRequestError, classifyError } from './errors';
  * `no-store` covers both.
  */
 
-const CACHE_HEADERS = { 'Cache-Control': 'no-store' } as const;
+const CACHE_HEADERS = {
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff',
+} as const;
 
 /** A 200 JSON response with the no-store cache policy. */
 export function ok<T>(data: T): NextResponse {
@@ -50,26 +53,30 @@ export interface Page<T> {
 /**
  * Build a {@link Page} from the rows a keyset query returned and their DTOs.
  *
- * `next_cursor` is non-null only when the page is *full* (`rows.length === limit`),
- * which is the sole signal that more rows may exist — a short page is terminal.
- * The cursor pins the last row's `(cursor_t, id)`, the same keyset the query
- * orders by, so the next page continues without gap or overlap.
+ * Callers must fetch `limit + 1` rows from the database and pass them here.
+ * `next_cursor` is non-null only when more rows exist, signalled by the query
+ * returning the extra sentinel row (i.e. `rows.length > limit`). The sentinel
+ * is never emitted to the client — only the first `limit` rows are mapped. A
+ * page shorter than `limit` rows is definitively terminal with no extra round-trip.
  *
- * The timestamp comes from the row's `cursor_t` — the microsecond-precise string
- * the page query selects (see `CURSOR_KEY_SQL`) — never from `created_at`: the
- * Neon driver truncates `timestamptz` to milliseconds when it builds the JS
- * `Date`, so a cursor minted from `created_at.toISOString()` would skip rows in
- * the same millisecond but with finer microseconds on the next page.
+ * The cursor pins the last *emitted* row's `(cursor_t, id)`. The timestamp comes
+ * from the row's `cursor_t` — the microsecond-precise string the page query
+ * selects (see `CURSOR_KEY_SQL`) — never from `created_at`: the Neon driver
+ * truncates `timestamptz` to milliseconds when it builds the JS `Date`, so a
+ * cursor minted from `created_at.toISOString()` would skip rows in the same
+ * millisecond but with finer microseconds on the next page.
  */
 export function paginate<TRow extends { cursor_t: string; id: string }, TDto>(
   rows: readonly TRow[],
   toDto: (row: TRow) => TDto,
   limit: number,
 ): Page<TDto> {
-  const data = rows.map(toDto);
-  const last = rows[rows.length - 1];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const data = pageRows.map(toDto);
+  const last = pageRows[pageRows.length - 1];
   const next_cursor =
-    rows.length === limit && last !== undefined
+    hasMore && last !== undefined
       ? encodeCursor({ t: last.cursor_t, id: last.id })
       : null;
   return { data, next_cursor };
