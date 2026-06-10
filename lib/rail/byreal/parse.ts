@@ -33,18 +33,32 @@ function canonicalizeZero(value: string): string {
  * exponent form `String()` produces for very small/large magnitudes (e.g. a fee
  * of `5e-8` must persist as `0.00000005`, not `5e-8`, to honour the `numeric`
  * column's canonical-decimal contract). Capped at the column's 18-digit scale.
+ *
+ * B-09: uses `toFixed` instead of `toLocaleString` for deterministic output
+ * across all ICU/Intl configurations (minimal-ICU Docker, Bun without bundled
+ * ICU, non-en-US system locale).
  */
 function numberToDecimal(value: number): string {
   if (Number.isInteger(value)) return value.toString();
-  return value.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 18 });
+  // toFixed(18) gives 18 fractional digits; strip trailing zeros + bare dot.
+  return value.toFixed(18).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
 /** Coerce a CLI numeric (string or finite number) to a canonical decimal string. */
 function toDecimal(value: unknown): string | undefined {
   if (typeof value === 'string') {
     const trimmed = value.trim();
+    // B-02: accept scientific-notation strings (e.g. "1e-8") by round-tripping
+    // through Number → numberToDecimal, which already handles the exponent form.
+    if (/[eE]/.test(trimmed)) {
+      const n = Number(trimmed);
+      if (!Number.isFinite(n)) return undefined;
+      return canonicalizeZero(numberToDecimal(n));
+    }
     if (!/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(trimmed)) return undefined;
-    return canonicalizeZero(trimmed);
+    // B-06: strip trailing fractional zeros to keep canonical decimal form.
+    const normalized = trimmed.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    return canonicalizeZero(normalized);
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
     return canonicalizeZero(numberToDecimal(value));

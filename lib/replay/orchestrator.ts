@@ -337,7 +337,7 @@ async function processAgentTick(
   const executed = decision.modified_intent ?? validated.intent;
   const { fill } = await settleWithFallback(
     rail,
-    { intent: executed, agentId, tickIndex: tick.index },
+    { intent: executed, agentId, tickIndex: tick.index, intentHash: validated.intent_hash },
     {
       status: 'filled',
       outcome: seedOutcome,
