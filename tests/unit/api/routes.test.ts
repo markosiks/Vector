@@ -137,8 +137,11 @@ describe('GET /api/policy-events', () => {
     // The page query selects a microsecond-precise `cursor_t` (CURSOR_KEY_SQL);
     // the cursor must carry it verbatim, not a millisecond-truncated `created_at`.
     const cursorT = '2026-06-08T07:00:00.123456Z';
-    respond = () => [{ ...policyEventRowFixture, cursor_t: cursorT }];
-    // limit=1 and one row returned ⇒ page is "full" ⇒ a cursor is offered.
+    // The DB repo fetches limit+1 rows (here limit=1, so 2 rows). paginate()
+    // sees rows.length(2) > limit(1), emits only the first row, sets next_cursor.
+    const sentinelRow = { ...policyEventRowFixture, id: crypto.randomUUID(), cursor_t: '2026-06-08T06:00:00.000000Z' };
+    respond = () => [{ ...policyEventRowFixture, cursor_t: cursorT }, sentinelRow];
+    // limit=1 and DB returned limit+1=2 rows ⇒ more data exists ⇒ cursor offered.
     const res = await policyEventsGET(req('http://x/api/policy-events?limit=1'));
     const body = (await res.json()) as { data: unknown[]; next_cursor: string | null };
     expect(body.data).toHaveLength(1);

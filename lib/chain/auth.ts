@@ -51,7 +51,12 @@ export async function verifyEip191Authorization(
   try {
     const recovered = await recoverMessageAddress({ message, signature });
     return getAddress(recovered) === expected;
-  } catch {
+  } catch (err) {
+    // Log the error name (not value) so unexpected viem failures surface in
+    // traces without leaking any signature material (F-08).
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[verifyEip191Authorization] caught:', (err as { name?: string }).name ?? typeof err);
+    }
     return false;
   }
 }

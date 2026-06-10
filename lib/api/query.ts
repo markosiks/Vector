@@ -37,9 +37,15 @@ export function parseLimit(raw: string | null): number {
   return Math.min(n, MAX_LIMIT);
 }
 
+/** Maximum base64url length for an opaque cursor token (F-10 defence-in-depth). */
+const MAX_CURSOR_LEN = 512;
+
 /** Parse the optional `?cursor=` keyset token, or `null` when absent. */
 export function parseCursor(raw: string | null): Cursor | null {
   if (raw === null || raw === '') return null;
+  if (raw.length > MAX_CURSOR_LEN) {
+    throw new BadRequestError('Malformed cursor', 'invalid_cursor');
+  }
   return decodeCursor(raw);
 }
 
