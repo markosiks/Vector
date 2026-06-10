@@ -23,6 +23,7 @@ drawdown-breached trade through. So:
 | # | Rule (`rule_fired`)           | Applies to          | Condition                                           | Decision | Severity |
 |---|-------------------------------|---------------------|-----------------------------------------------------|----------|----------|
 | 1 | `kill_switch`                 | all                 | global kill switch active                           | HALT     | halt     |
+| 1b | `agent_halt`                 | all                 | agent halted by operator (`agents.status='halted'`) | HALT     | halt     |
 | 2 | `market_whitelist`            | open, modify, close | `market` not in `market_whitelist` (exact match)    | REJECT   | hard     |
 | 3 | `fresh_wallet_transfer_block` | transfer            | destination not on address whitelist (or missing)   | REJECT   | hard     |
 | 4 | `drawdown_breaker`            | all                 | `drawdown >= dd_breaker`                            | HALT     | halt     |
@@ -123,6 +124,14 @@ event recording that re-evaluation.
 - **P1.2** consumes `policy_events` (`rule_fired`, severity) to compute scoring
   penalties and `drain_r`.
 
+## Security notes
+
+- **Market whitelist is disclosed in REJECT `detail_json`** (`rule_fired: 'market_whitelist'`). The
+  full whitelist array is included for operator observability, which is acceptable for the demo
+  (the whitelist is non-secret). For production deployments, consider omitting the `whitelist`
+  field from the detail, or replacing it with a stable count/hash, to avoid exposing the full
+  allow-list to unauthenticated callers of `GET /api/policy-events`.
+
 ## Caller contract & non-guarantees
 
 `evaluate` is a **pure judge over an injected `RefereeState` snapshot**: it does
@@ -138,7 +147,9 @@ state and serializes submissions. The caller MUST honor these:
   budget in the same transaction as the decision (e.g. `UPDATE … SET remaining =
   remaining - $size WHERE remaining >= $size`) or hold a per-(agent,round) lock
   around snapshot→decide→commit. `policy.spend_cap` (config) is **not** an
-  enforced absolute backstop today — only `remaining_budget` gates spend.
+  enforced absolute backstop today — only `remaining_budget` gates spend. The
+  `spend_cap` field is logged in `policy_events.detail_json` for audit context
+  only; it does not gate any decision.
 - **HALT freshness is the caller's job.** `killSwitch`/`drawdown` are read from
   the snapshot taken *before* `runReferee`'s async re-validation. To avoid an
   in-flight Intent slipping past a kill switch flipped mid-evaluation, gate

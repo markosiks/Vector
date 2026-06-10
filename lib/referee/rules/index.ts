@@ -1,4 +1,4 @@
-import type { Rule } from '../types';
+import type { ClipRule, Rule } from '../types';
 import { agentHaltRule } from './agent-halt';
 import { drawdownBreakerRule } from './drawdown-breaker';
 import { killSwitchRule } from './kill-switch';
@@ -45,7 +45,7 @@ export const BLOCKING_RULES: readonly Rule[] = [
   spendCapRejectRule,
 ];
 
-export const CLIPPING_RULES: readonly Rule[] = [sizeCapRule, spendCapClipRule, leverageCapRule];
+export const CLIPPING_RULES: readonly ClipRule[] = [sizeCapRule, spendCapClipRule, leverageCapRule];
 
 export {
   agentHaltRule,

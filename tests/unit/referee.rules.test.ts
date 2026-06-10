@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CONFIG } from '@/lib/config/constants';
 import {
+  agentHaltRule,
   drawdownBreakerRule,
   killSwitchRule,
   leverageCapRule,
@@ -40,6 +41,33 @@ describe('rule 1 — kill switch', () => {
   });
   test('passes when inactive', () => {
     expect(killSwitchRule(openIntent(), cleanState(), POLICY)).toBeNull();
+  });
+});
+
+describe('rule 1b — agent halt (R-05 regression)', () => {
+  test('fires HALT/halt when agent.halted is true, regardless of intent', () => {
+    const r = agentHaltRule(
+      openIntent(),
+      cleanState({ agent: { allocation: '100000', remaining_budget: '100000', drawdown: '0', halted: true } }),
+      POLICY,
+    );
+    expect(r).toMatchObject({ decision: 'HALT', severity: 'halt', rule_fired: 'agent_halt' });
+  });
+  test('passes when agent.halted is false', () => {
+    const r = agentHaltRule(
+      openIntent(),
+      cleanState({ agent: { allocation: '100000', remaining_budget: '100000', drawdown: '0', halted: false } }),
+      POLICY,
+    );
+    expect(r).toBeNull();
+  });
+  test('passes when agent.halted is absent (not halted by default)', () => {
+    expect(agentHaltRule(openIntent(), cleanState(), POLICY)).toBeNull();
+  });
+  test('halts all intent actions — not just open', () => {
+    const state = cleanState({ agent: { allocation: '100000', remaining_budget: '100000', drawdown: '0', halted: true } });
+    expect(agentHaltRule(transferIntent(), state, POLICY)).toMatchObject({ decision: 'HALT', rule_fired: 'agent_halt' });
+    expect(agentHaltRule(closeIntent(), state, POLICY)).toMatchObject({ decision: 'HALT', rule_fired: 'agent_halt' });
   });
 });
 

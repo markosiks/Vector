@@ -96,3 +96,31 @@ export type Rule = (
   state: RefereeState,
   config: RefereeConfig,
 ) => RefereeResult | null;
+
+/**
+ * The result type for a clipping rule: must be a CLIP with `modified_intent`
+ * present. This type prevents a clipping-phase rule from accidentally returning
+ * a HALT/REJECT (which would bypass phase separation) or omitting
+ * `modified_intent` (which would cause the clip to be silently dropped in
+ * `evaluate.ts`).
+ */
+export interface ClipResult {
+  readonly decision: 'CLIP';
+  readonly severity: 'soft';
+  readonly rule_fired: string;
+  readonly detail: Record<string, unknown>;
+  readonly modified_intent: Intent;
+  readonly clipped: true;
+}
+
+/**
+ * A clipping-phase rule: returns a {@link ClipResult} (always CLIP with a
+ * `modified_intent`) or `null` to pass. Typed separately from {@link Rule} so
+ * TypeScript enforces the clipping contract on every entry in
+ * `CLIPPING_RULES`.
+ */
+export type ClipRule = (
+  intent: Intent,
+  state: RefereeState,
+  config: RefereeConfig,
+) => ClipResult | null;
