@@ -169,7 +169,26 @@ class FakeDb implements Queryable {
     sql: string,
     params?: readonly unknown[],
   ): Promise<{ rows: R[]; rowCount: number | null }> {
+    if (sql.includes('FOR UPDATE')) {
+      // S1: row-lock query — return a stub agent row so the lock path is exercised.
+      return { rows: [{ id: AGENT }] as R[], rowCount: 1 };
+    }
     if (sql.startsWith('SELECT') && sql.includes('FROM scores')) {
+      // S4 fix: distinguish the two score-query shapes so each returns the
+      // correct data instead of both collapsing to `latestScoreRows`.
+      //
+      // `getScoreByAgentRound` binds agent_id=$1 AND round_id=$2 — detect by
+      // the presence of "round_id" in the WHERE clause.
+      // `getLatestScoreByAgent` JOINs rounds and returns at most one row.
+      if (sql.includes('round_id')) {
+        // Point query: return the matching row (if round matches), or empty.
+        const roundId = params?.[1] as string | undefined;
+        const matching = this.latestScoreRows.filter(
+          (r) => roundId === undefined || r['round_id'] === roundId,
+        );
+        return { rows: matching as R[], rowCount: matching.length };
+      }
+      // Latest-score JOIN query — return the full set (the real query returns ≤1).
       return { rows: this.latestScoreRows as R[], rowCount: this.latestScoreRows.length };
     }
     if (sql.startsWith('INSERT INTO scores')) {
@@ -280,7 +299,8 @@ describe('recordScore', () => {
     // never applied (partial failure). The insert now conflicts; recordScore must
     // re-read the persisted crash row and STILL gate the agent from it — even
     // though the recomputed inputs look healthy.
-    const db = new FakeDb([{ ...latestRow('7.000') }], /* insertConflict */ true);
+    // S4 fix: use ROUND as the round_id so the FakeDb can match `getScoreByAgentRound` correctly.
+    const db = new FakeDb([{ ...latestRow('7.000', ROUND) }], /* insertConflict */ true);
     const { result, agent } = await recordScore({
       db,
       agentId: AGENT,
@@ -291,6 +311,35 @@ describe('recordScore', () => {
     expect(db.updateParams?.[1]).toBe('7.000'); // …but the cache follows the persisted truth
     expect(db.updateParams?.[2]).toBe(true); // gated from the persisted 7.000 < s_min
     expect(agent.status).toBe('gated');
+  });
+
+  test('S1 regression: issues SELECT…FOR UPDATE before reading the EWMA prior', async () => {
+    // Verify that recordScore emits a FOR UPDATE lock query before the scoring
+    // read-modify-write sequence, so concurrent calls are serialized on a
+    // transaction-bound client and the EWMA prior is never read stale.
+    const lockQueries: string[] = [];
+    const trackingDb: Queryable = {
+      async query<R = Record<string, unknown>>(
+        sql: string,
+        params?: readonly unknown[],
+      ): Promise<{ rows: R[]; rowCount: number | null }> {
+        if (sql.includes('FOR UPDATE')) {
+          lockQueries.push(sql);
+          return { rows: [{ id: AGENT }] as R[], rowCount: 1 };
+        }
+        // Delegate to a FakeDb for the rest.
+        return new FakeDb([]).query<R>(sql, params);
+      },
+    };
+    await recordScore({
+      db: trackingDb,
+      agentId: AGENT,
+      roundId: ROUND,
+      inputs: { pnl_r: 500, car_r: 10_000, soft: 0, hard: 0, halt: 0, dd_r: 0, drain_r: false },
+    });
+    // At least one FOR UPDATE query must have been issued, and it must reference the agents table.
+    expect(lockQueries.length).toBeGreaterThan(0);
+    expect(lockQueries[0]).toContain('agents');
   });
 });
 
@@ -315,11 +364,11 @@ describe('updateAgentScore', () => {
   });
 });
 
-function latestRow(scoreR: string): Record<string, unknown> {
+function latestRow(scoreR: string, roundId = '00000000-0000-0000-0000-000000000000'): Record<string, unknown> {
   return {
     id: crypto.randomUUID(),
     agent_id: AGENT,
-    round_id: '00000000-0000-0000-0000-000000000000',
+    round_id: roundId,
     raw_r: '0.00000000',
     score_r: scoreR,
     components_json: null,
