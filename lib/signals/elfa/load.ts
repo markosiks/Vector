@@ -49,8 +49,8 @@ export function loadElfaSignalProvider(options: LoadElfaOptions = {}): ElfaSigna
 
   const client = wantLive
     ? createElfaClient({
-        // `wantLive` proves `apiKey` is defined; assert for the type.
-        apiKey: apiKey as string,
+        // `wantLive` proves `apiKey` is defined; non-null assert is safer than `as string`.
+        apiKey: apiKey!,
         endpoint: CONFIG.elfa.endpoint,
       })
     : undefined;

@@ -1,5 +1,19 @@
+import { NansenRateLimitError } from './client';
 import type { NansenClient } from './client';
 import type { NansenLogger, NansenSignal, NansenSignalProvider } from './types';
+
+/**
+ * Total error-name extractor for the detached fail-open path. Reading `.name`
+ * off an exotic thrown value (e.g. a Proxy with a throwing getter) could itself
+ * throw; this swallows that so the detached `runFetch` can never reject.
+ */
+function errorName(err: unknown): string {
+  try {
+    return err instanceof Error ? err.name : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
 
 /**
  * The caching, slow-polling provider that fronts a {@link NansenClient} (P2.2).
@@ -56,6 +70,8 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
   let lastPollTick: number | undefined;
   let calls = 0;
   let budgetExhaustedLogged = false;
+  /** Earliest wall-clock instant at which the cadence gate may fire again (rate-limit backoff). */
+  let rateLimitUntilMs = 0;
 
   /**
    * Emit one observability event. The logger is caller-supplied and may throw
@@ -76,8 +92,9 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
     return cache?.value;
   }
 
-  /** Is the cadence due for `tickIndex`? First tick is always due. */
+  /** Is the cadence due for `tickIndex`? First tick is always due. Respects rate-limit backoff. */
   function cadenceDue(tickIndex: number): boolean {
+    if (now() < rateLimitUntilMs) return false; // still in Retry-After window
     return lastPollTick === undefined || tickIndex - lastPollTick >= deps.pollEveryNTicks;
   }
 
@@ -101,11 +118,18 @@ export function createNansenSignalProvider(deps: NansenProviderDeps): NansenSign
       });
     } catch (err) {
       // Fail-open: keep the last good snapshot; surface only a redacted reason.
+      // `errorName` is total — this catch must never throw (the fetch is detached,
+      // so a throw here would become an unhandled rejection).
+      if (err instanceof NansenRateLimitError && err.retryAfterMs !== undefined) {
+        // Respect the upstream's Retry-After: block the cadence gate until the
+        // requested backoff has elapsed, so we don't burn credits re-polling.
+        rateLimitUntilMs = now() + err.retryAfterMs;
+      }
       log({
         type: 'fetch_error',
         endpoint: endpointLabel,
         calls,
-        reason: err instanceof Error ? err.name : 'unknown',
+        reason: errorName(err),
       });
     }
   }
