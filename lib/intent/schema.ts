@@ -3,7 +3,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { INTENT_SIDE } from '@/lib/db/schema';
 
-import { normalizeDecimal, normalizeNonce, normalizeTimestamp } from './canonical';
+import { MAX_NONCE_LENGTH, normalizeDecimal, normalizeNonce, normalizeTimestamp } from './canonical';
 
 /**
  * Structural (schema-level) validation of an Intent — step (a) of the ordered
@@ -36,17 +36,22 @@ const numericField = z.union([z.number(), z.string()]).transform((v, ctx) => {
 });
 
 /** A string/integer nonce, normalized to a canonical string. */
-const nonceField = z.union([z.string(), z.number()]).transform((v, ctx) => {
-  try {
-    return normalizeNonce(v);
-  } catch (err) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: err instanceof Error ? err.message : 'invalid nonce',
-    });
-    return z.NEVER;
-  }
-});
+// The .max() cap is applied before the transform so an over-length string nonce
+// is rejected at the schema stage (unauthenticated input parsed before signature
+// verification); mirrors the MAX_NONCE_LENGTH guard in normalizeNonce (I-01).
+const nonceField = z
+  .union([z.string().max(MAX_NONCE_LENGTH, `nonce must not exceed ${MAX_NONCE_LENGTH} characters`), z.number()])
+  .transform((v, ctx) => {
+    try {
+      return normalizeNonce(v);
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: err instanceof Error ? err.message : 'invalid nonce',
+      });
+      return z.NEVER;
+    }
+  });
 
 /** An ISO-8601 string or epoch-ms timestamp, normalized to ISO-8601 UTC. */
 const ttlField = z.union([z.string(), z.number()]).transform((v, ctx) => {
@@ -68,9 +73,10 @@ const signatureField = z
   .transform((s) => s as `0x${string}`);
 
 /**
- * Fields common to every action. `target_address` is structurally optional on
- * all actions; the "only on transfer" rule is enforced by the validator's
- * target-address step, not here (so that check stays observable in ordering).
+ * Fields common to every action. `target_address` is intentionally absent here;
+ * it is added as a *required* field on `transferVariant` only (I-04). The
+ * "only on transfer" policy check in the validator remains for non-transfer
+ * actions that supply it, keeping the ordering observable.
  */
 const baseShape = {
   // Upper length bounds cap unauthenticated input at the schema stage (DoS / log
@@ -81,7 +87,6 @@ const baseShape = {
   agent_id: z.string().min(1).max(128),
   nonce: nonceField,
   ttl: ttlField,
-  target_address: z.string().min(1).max(128).optional(),
 } as const;
 
 const tradeShape = {
@@ -106,10 +111,15 @@ const transferShape = {
   size: numericField,
 } as const;
 
-const openVariant = { action: z.literal('open'), ...baseShape, ...tradeShape } as const;
-const modifyVariant = { action: z.literal('modify'), ...baseShape, ...tradeShape } as const;
-const closeVariant = { action: z.literal('close'), ...baseShape, ...closeShape } as const;
-const transferVariant = { action: z.literal('transfer'), ...baseShape, ...transferShape } as const;
+// target_address is optional on non-transfer actions (the validator's
+// target-address stage rejects it if present); it is required on transfer (I-04).
+const targetAddressOptional = { target_address: z.string().min(1).max(128).optional() } as const;
+const targetAddressRequired = { target_address: z.string().min(1).max(128) } as const;
+
+const openVariant = { action: z.literal('open'), ...baseShape, ...targetAddressOptional, ...tradeShape } as const;
+const modifyVariant = { action: z.literal('modify'), ...baseShape, ...targetAddressOptional, ...tradeShape } as const;
+const closeVariant = { action: z.literal('close'), ...baseShape, ...targetAddressOptional, ...closeShape } as const;
+const transferVariant = { action: z.literal('transfer'), ...baseShape, ...targetAddressRequired, ...transferShape } as const;
 
 /** Unsigned Intent (agent-authored, pre-signature). Strict: unknown keys rejected. */
 export const unsignedIntentSchema = z.discriminatedUnion('action', [

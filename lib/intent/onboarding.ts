@@ -91,7 +91,25 @@ export const REJECTION_CATALOG: readonly RejectionReason[] = [
   },
   {
     stage: 'bounds',
-    codes: ['nonpositive_size', 'slippage_out_of_range', 'nonpositive_leverage', 'size_magnitude'],
+    // All stable machine codes from checkBounds in validate.ts (I-03).
+    // Adding a new code to checkBounds without updating this list fails the
+    // compile-time check below (_BoundsCodesAreExhaustive).
+    codes: [
+      'nonpositive_size',
+      'size_magnitude',
+      'size_scale',
+      'nonpositive_tp',
+      'tp_magnitude',
+      'tp_scale',
+      'nonpositive_sl',
+      'sl_magnitude',
+      'sl_scale',
+      'slippage_out_of_range',
+      'slippage_scale',
+      'nonpositive_leverage',
+      'leverage_magnitude',
+      'leverage_scale',
+    ],
     when: '`size`/`leverage`/`tp`/`sl` ≤ 0, `max_slippage` outside `[0, 1]`, or a value with more magnitude/precision than can be stored exactly.',
     fix: 'Send positive sizes/leverage, a `max_slippage` fraction in `[0, 1]`, and values within the storable numeric range.',
   },
