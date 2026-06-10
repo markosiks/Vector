@@ -155,7 +155,7 @@ export const policySchema = z.object({
 /** Labeled-testnet capital pool config — V4. */
 export const capitalSchema = z.object({
   /** Fixed size of the labeled-testnet capital pool (conserved on reallocation). */
-  pool_size: positive,
+  pool_size: positiveInt,
   /** Human-facing label for capital units (clearly marked as testnet). */
   capital_unit_label: z.string().min(1),
 });

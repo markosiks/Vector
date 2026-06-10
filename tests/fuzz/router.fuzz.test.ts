@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { CONFIG } from '@/lib/config/constants';
 import { route } from '@/lib/router/route';
 import type { Allocation, PrevAllocation, RouterAgent, RouterConfig } from '@/lib/router/types';
+import { amountUnits } from '@/tests/helpers/router';
 
 /**
  * Property fuzzing for the capital router (§10). A deterministic PRNG drives
@@ -35,11 +36,6 @@ function rng(seed: number): () => number {
   };
 }
 
-function amountUnits(a: string): bigint {
-  const [i, f = ''] = a.split('.');
-  return BigInt((i ?? '0') + f.padEnd(18, '0').slice(0, 18));
-}
-
 function totalUnits(allocs: readonly Allocation[]): bigint {
   return allocs.reduce((acc, a) => acc + amountUnits(a.amount), 0n);
 }
@@ -62,7 +58,8 @@ describe('router fuzz — invariants hold on wide-range inputs', () => {
       const trigger = TRIGGERS[Math.floor(r() * TRIGGERS.length)] ?? 'settle';
       const state = { tick: Math.floor(r() * 20), cooldownUntilTick: Math.floor(r() * 20) };
 
-      // Sometimes seed a prior allocation that itself conserves the pool.
+      // Sometimes seed an approximate prior allocation (floats, not exact-conserving);
+      // the router re-normalises via prevSum and apportion guarantees output conservation regardless.
       let prev: PrevAllocation[] = [];
       if (r() < 0.6) {
         const raw = agents.map(() => r());
