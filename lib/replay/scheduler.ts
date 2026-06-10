@@ -80,11 +80,26 @@ export function planTicks(totalTicks: number, timing: SchedulerTiming): TickPlan
   return plan;
 }
 
-/** Number of rounds in an arc of `totalTicks` ticks (each `ticks_per_round` long). */
+/**
+ * Number of rounds in an arc of `totalTicks` ticks (each `ticks_per_round` long).
+ *
+ * `totalTicks` must be an exact multiple of `ticks_per_round` — the same
+ * precondition as {@link planTicks}. Enforcing it here prevents a caller that
+ * skips `planTicks` from receiving a silently wrong (ceiling-rounded) count
+ * (R-06).
+ *
+ * @throws {RangeError} if `totalTicks` is not divisible by `ticks_per_round`.
+ */
 export function roundCount(totalTicks: number, timing: SchedulerTiming): number {
   assertPositiveInt(totalTicks, 'totalTicks');
   assertPositiveInt(timing.ticks_per_round, 'ticks_per_round');
-  return Math.ceil(totalTicks / timing.ticks_per_round);
+  if (totalTicks % timing.ticks_per_round !== 0) {
+    throw new RangeError(
+      `scheduler: totalTicks (${totalTicks}) must be a whole multiple of ticks_per_round ` +
+        `(${timing.ticks_per_round}) so every round settles`,
+    );
+  }
+  return totalTicks / timing.ticks_per_round;
 }
 
 /**
