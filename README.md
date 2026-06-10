@@ -12,6 +12,15 @@ injection cannot drain funds.
 The product is a deterministic ~90-second arc:
 **merit → blocked theft → reputation collapse → capital reroute.**
 
+## Demo
+
+**[▶ Watch the 2-minute demo video](./docs/demo/vector-demo.mp4)** — a real,
+unmocked run of the full pipeline: merit-driven allocation → injected
+fund-draining transfer → hard referee reject → reputation collapse (score 7,
+gated) → full pool rerouted to the runner-up, conserved to the last unit.
+
+[![Vector demo — blocked drain attack and capital reroute](./docs/demo/demo-preview.png)](./docs/demo/vector-demo.mp4)
+
 ## Live deployment
 
 | | |
