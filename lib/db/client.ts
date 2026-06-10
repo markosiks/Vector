@@ -101,6 +101,17 @@ export async function withTransaction<T>(fn: (tx: Queryable) => Promise<T>): Pro
   }
 }
 
+/**
+ * Adapt a Neon `PoolClient` (or any object whose `query` signature is a superset
+ * of {@link Queryable}) to the narrow {@link Queryable} interface without a
+ * double-cast. This is the safe alternative to `client as unknown as Queryable`
+ * used at call sites (R-04): the structural check is explicit and confined to
+ * this one function, making the cast auditable in a single place.
+ */
+export function toQueryable(client: { query: Queryable['query'] }): Queryable {
+  return client;
+}
+
 /** Default upper bound on the health probe before it reports `down`. */
 const DEFAULT_PROBE_TIMEOUT_MS = 2_000;
 
