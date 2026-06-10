@@ -47,10 +47,22 @@ forge script script/Deploy.s.sol:DeployScript \
   --broadcast --verify
 ```
 
-> **TODO: `<new address>`** — the previous 0..1000-scale deployment at
-> `0x00dd1ee8dc51b8fb704487feba103cf782c6ab12` is retired. After redeploying
-> with the updated 0..100 scale, update this README and the root README with the
-> new deployed address.
+## Deployed (Mantle Sepolia, chainId 5003)
+
+| Field | Value |
+|---|---|
+| **VectorMeritRegistry** | `0x1894Be93D9ACA27b7A6AF0eaD56354D9EbA0Ffb9` |
+| Owner | `0x14BA21DDDdC237D73Ae02b6E451a75C5B24bb8C8` |
+| Attestor | `0x802DA71f4aBC063edF5F24bC4f32c86C5aE0De02` |
+| Scale | integer `0..100` (`valueDecimals = 0`) |
+
+> The previous 0..1000-scale deployment at
+> `0x00dd1ee8dc51b8fb704487feba103cf782c6ab12` is **retired** — it predates the
+> score-scale alignment and must not be used.
+
+Live round-trip verified on-chain (`attestScore → latestScore → isEligible`):
+agentId `1` attested score `74` → `isEligible(1, 50) = true`,
+`isEligible(1, 90) = false`.
 
 ## Build / Test / Coverage
 
