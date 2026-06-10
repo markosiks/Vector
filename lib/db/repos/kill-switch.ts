@@ -53,5 +53,7 @@ export async function setKillSwitch(
      RETURNING *`,
     [input.active, input.reason ?? null, input.set_by ?? null],
   );
-  return killSwitchRow.parse(rows[0]);
+  const row = rows[0];
+  if (row === undefined) throw new Error('setKillSwitch: INSERT ON CONFLICT DO UPDATE returned no row');
+  return killSwitchRow.parse(row);
 }

@@ -49,16 +49,6 @@ export function getScoreByAgentRound(
   );
 }
 
-/** Score history for an agent, oldest first (for the agent-detail chart). */
-export function listScoresByAgent(db: Queryable, agentId: string): Promise<ScoreRow[]> {
-  return selectMany(
-    db,
-    'SELECT * FROM scores WHERE agent_id = $1 ORDER BY created_at ASC',
-    [agentId],
-    scoreRow,
-  );
-}
-
 /**
  * Upper bound on the number of score rows returned for the agent-detail EWMA
  * chart. The chart polls on the UI cadence, so an unbounded history would grow
