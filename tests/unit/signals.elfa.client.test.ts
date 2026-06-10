@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   createElfaClient,
+  ELFA_TIME_WINDOW,
   ELFA_TRENDING_PATH,
   ElfaClientError,
   ElfaHttpError,
@@ -96,13 +97,38 @@ describe('elfa client — happy path', () => {
     expect(signal.sentiments).toEqual([{ symbol: 'SOL', sentiment: '0.1' }]);
   });
 
+  // Regression: live v2 shape (2026) — `{ data: { data: [...] } }` envelope with
+  // `current_count`/`change_percent` rows (no explicit sentiment on this tier).
+  test('unwraps the live `{ data: { data: [...] } }` envelope and momentum aliases', async () => {
+    const { fetchImpl } = stubFetch(
+      jsonResponse({
+        success: true,
+        data: {
+          total: 50,
+          page: 1,
+          pageSize: 50,
+          data: [
+            { token: 'btc', current_count: 607, previous_count: 628, change_percent: -3.34 },
+            { token: 'spcx', current_count: 132, previous_count: 103, change_percent: 28.16 },
+          ],
+        },
+      }),
+    );
+    const client = createElfaClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl });
+    const signal = await client.fetchSignal();
+    expect(signal.sentiments).toEqual([
+      { symbol: 'btc', sentiment: '-3.34', mentions: '607' },
+      { symbol: 'spcx', sentiment: '28.16', mentions: '132' },
+    ]);
+  });
+
   test('sends the key in the `x-elfa-api-key` header, never in the URL, GET method', async () => {
     const { fetchImpl, calls } = stubFetch(jsonResponse([]));
     const client = createElfaClient({ apiKey: 'super-secret', endpoint: ENDPOINT, fetchImpl });
     await client.fetchSignal();
 
     const { url, init } = calls[0]!;
-    expect(url).toBe(`${ENDPOINT}${ELFA_TRENDING_PATH}`);
+    expect(url).toBe(`${ENDPOINT}${ELFA_TRENDING_PATH}?timeWindow=${ELFA_TIME_WINDOW}`);
     expect(url).not.toContain('super-secret');
     const headers = init?.headers as Record<string, string>;
     expect(headers['x-elfa-api-key']).toBe('super-secret');

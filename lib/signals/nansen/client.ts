@@ -18,8 +18,18 @@ import type { NansenNetflow, NansenSignal } from './types';
  * response it cannot confidently normalize is a {@link NansenParseError}.
  */
 
-/** The one endpoint path this client speaks to (appended to the base URL). */
-export const NANSEN_NETFLOWS_PATH = '/api/v1/smart-money/netflows';
+/**
+ * The one endpoint path this client speaks to (appended to the base URL).
+ * Note: the live API path is singular (`netflow`); the plural form 404s.
+ */
+export const NANSEN_NETFLOWS_PATH = '/api/v1/smart-money/netflow';
+
+/**
+ * Default request body. The live endpoint *requires* a `chains` list (422
+ * without it). Mantle first (the project's home chain), Ethereum as a dense
+ * fallback so the snapshot is never empty when Mantle smart-money flow is thin.
+ */
+export const NANSEN_DEFAULT_REQUEST_BODY = { chains: ['mantle', 'ethereum'] } as const;
 
 /** Default per-request wall-clock timeout. */
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -141,9 +151,12 @@ const netflowRowSchema = z
     address: z.string().min(1).optional(),
     symbol: z.string().min(1).optional(),
     tokenSymbol: z.string().min(1).optional(),
+    token_symbol: z.string().min(1).optional(),
     netflowUsd: numericString.optional(),
     netflow_usd: numericString.optional(),
     netflow: numericString.optional(),
+    // Live API shape (2026): per-window net flows; 24h is the canonical value.
+    net_flow_24h_usd: numericString.optional(),
   })
   .passthrough();
 
@@ -164,12 +177,12 @@ function normalizeRow(raw: unknown): NansenNetflow | null {
   const parsed = netflowRowSchema.safeParse(raw);
   if (!parsed.success) return null;
   const r = parsed.data;
-  const netflowUsd = r.netflowUsd ?? r.netflow_usd ?? r.netflow;
+  const netflowUsd = r.netflowUsd ?? r.netflow_usd ?? r.netflow ?? r.net_flow_24h_usd;
   if (netflowUsd === undefined) return null; // No usable signal value: drop the row.
 
   const chain = r.chain;
   const tokenAddress = r.tokenAddress ?? r.token_address ?? r.address;
-  const symbol = r.symbol ?? r.tokenSymbol;
+  const symbol = r.symbol ?? r.tokenSymbol ?? r.token_symbol;
   return {
     ...(chain === undefined ? {} : { chain }),
     ...(tokenAddress === undefined ? {} : { tokenAddress }),
@@ -227,7 +240,7 @@ export function createNansenClient(deps: NansenClientDeps): NansenClient {
   const url = new URL(NANSEN_NETFLOWS_PATH, deps.endpoint).toString();
   // A minimal, generic netflows query. Overridable but never required so the
   // demo can run without venue-specific tuning.
-  const body = deps.requestBody ?? { parameters: {} };
+  const body = deps.requestBody ?? NANSEN_DEFAULT_REQUEST_BODY;
 
   async function fetchSignal(): Promise<NansenSignal> {
     const controller = new AbortController();

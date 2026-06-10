@@ -76,6 +76,36 @@ describe('nansen client — happy path', () => {
     ]);
   });
 
+  // Regression: live API shape (2026) — `token_symbol` + per-window `net_flow_*_usd`
+  // keys; the 24h window is the canonical netflow value.
+  test('normalizes the live `token_symbol` / `net_flow_24h_usd` row shape', async () => {
+    const { fetchImpl } = stubFetch(
+      jsonResponse({
+        data: [
+          {
+            token_address: '0x32b4d049fe4c888d2b92eecaf729f44df6b1f36e',
+            token_symbol: 'ROBO',
+            net_flow_1h_usd: 0.0,
+            net_flow_24h_usd: 11380.108461043508,
+            net_flow_7d_usd: 11380.108461043508,
+            chain: 'ethereum',
+            trader_count: 1,
+          },
+        ],
+      }),
+    );
+    const client = createNansenClient({ apiKey: 'k', endpoint: ENDPOINT, fetchImpl });
+    const signal = await client.fetchSignal();
+    expect(signal.netflows).toEqual([
+      {
+        chain: 'ethereum',
+        tokenAddress: '0x32b4d049fe4c888d2b92eecaf729f44df6b1f36e',
+        symbol: 'ROBO',
+        netflowUsd: '11380.108461043508',
+      },
+    ]);
+  });
+
   test('sends the key in the `apiKey` header, never in the URL', async () => {
     const { fetchImpl, calls } = stubFetch(jsonResponse([]));
     const client = createNansenClient({ apiKey: 'super-secret', endpoint: ENDPOINT, fetchImpl });
