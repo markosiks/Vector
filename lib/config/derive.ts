@@ -16,7 +16,13 @@ export function isEligible(score: number): boolean {
   return score >= CONFIG.router.s_min;
 }
 
-/** Build an explorer URL for a transaction hash on Mantle testnet (§7.3/P2.3). */
-export function explorerTxUrl(txHash: string): string {
-  return `${CONFIG.chain.mantle_explorer_base_url}/tx/${txHash}`;
-}
+/**
+ * Explorer URL for a transaction hash. Re-exported from
+ * {@link import('@/lib/credibility/explorer').explorerTxUrl} — that version
+ * validates the hash format and returns `null` for invalid input, preventing
+ * attacker-controlled strings from silently appearing in URLs.
+ *
+ * @deprecated Import directly from `@/lib/credibility/explorer` for new code.
+ *   This re-export exists only to keep existing consumers working.
+ */
+export { explorerTxUrl } from '@/lib/credibility/explorer';

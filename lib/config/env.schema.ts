@@ -1,3 +1,4 @@
+import { privateKeyToAccount } from 'viem/accounts';
 import { z } from 'zod';
 
 /**
@@ -79,6 +80,16 @@ const httpUrl = z
 const secret = z.string().trim().min(1).max(MAX_URL_LEN);
 
 /**
+ * A 0x-prefixed 32-byte hex EVM private key, as expected by viem.
+ * Validates format at startup so a misconfigured key fails fast with a clear
+ * config error rather than an opaque on-chain write failure.
+ */
+const evmPrivateKey = z
+  .string()
+  .trim()
+  .regex(/^0x[0-9a-fA-F]{64}$/, 'must be a 0x-prefixed 32-byte hex EVM private key');
+
+/**
  * The environment schema. Only `DATABASE_URL` is required at P0.1 (the health
  * check needs it). Chain/signal/operator values are validated **if present** so
  * a malformed value fails fast, but they remain optional until their stage.
@@ -93,14 +104,15 @@ export const envSchema = z.object({
   /** Elfa API key (P3.1). Secret. Optional until its stage. */
   ELFA_API_KEY: secret.optional(),
   /** Owner key that registers agents in the Identity Registry. Secret. Optional until its stage. */
-  OPERATOR_PRIVATE_KEY: secret.optional(),
+  OPERATOR_PRIVATE_KEY: evmPrivateKey.optional(),
   /**
    * Attestor key that authors feedback writes. Secret. Optional until its stage.
    * MUST resolve to a different address than OPERATOR_PRIVATE_KEY: the registry
    * rejects feedback from an agent's owner/operator (self-feedback). The
-   * distinctness invariant is enforced at the client (`assertDistinctSigners`).
+   * distinctness invariant is enforced both here (superRefine, C-04) and at the
+   * client (`assertDistinctSigners`) as defence-in-depth.
    */
-  ATTESTOR_PRIVATE_KEY: secret.optional(),
+  ATTESTOR_PRIVATE_KEY: evmPrivateKey.optional(),
   /**
    * Absolute public base URL this deployment serves from, e.g.
    * `https://vector.app`. Used to build the on-chain `feedbackURI` for the
@@ -155,6 +167,27 @@ export const envSchema = z.object({
   OPERATOR_CONSOLE_TOKEN: z.string().trim().min(24).max(MAX_URL_LEN).optional(),
   /** Deployed commit SHA surfaced by `/api/health`. Non-secret, optional. */
   GIT_COMMIT: z.string().trim().max(MAX_URL_LEN).optional(),
+}).superRefine((data, ctx) => {
+  // C-04: OPERATOR and ATTESTOR must resolve to different EVM addresses.
+  // Checked here (after hex format is already validated) so a same-key pair
+  // fails at startup with a clear config error rather than an opaque on-chain
+  // rejection at first transaction time.
+  if (data.OPERATOR_PRIVATE_KEY !== undefined && data.ATTESTOR_PRIVATE_KEY !== undefined) {
+    const operatorAddr = privateKeyToAccount(
+      data.OPERATOR_PRIVATE_KEY as `0x${string}`,
+    ).address.toLowerCase();
+    const attestorAddr = privateKeyToAccount(
+      data.ATTESTOR_PRIVATE_KEY as `0x${string}`,
+    ).address.toLowerCase();
+    if (operatorAddr === attestorAddr) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ATTESTOR_PRIVATE_KEY'],
+        message:
+          'ATTESTOR_PRIVATE_KEY must resolve to a different address than OPERATOR_PRIVATE_KEY (self-feedback is rejected by the registry)',
+      });
+    }
+  }
 });
 
 /** The validated environment shape. */

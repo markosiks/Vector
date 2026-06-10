@@ -17,8 +17,8 @@ export type DeepReadonly<T> = T extends (infer U)[]
 /** Freeze `value` and every nested object/array it transitively owns. */
 export function deepFreeze<T>(value: T): DeepReadonly<T> {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
-    for (const key of Object.keys(value)) {
-      deepFreeze((value as Record<string, unknown>)[key]);
+    for (const key of Reflect.ownKeys(value)) {
+      deepFreeze((value as Record<string | symbol, unknown>)[key]);
     }
     Object.freeze(value);
   }
