@@ -103,11 +103,13 @@ describe('rule 3 — fresh-wallet / transfer block (critical invariant)', () => 
     ).toBeNull();
   });
   test('transfer with no target_address is rejected (missing destination)', () => {
-    const r = transferBlockRule(
-      transferIntent({ target_address: undefined }),
-      cleanState(),
-      POLICY,
-    );
+    // Since I-04 makes target_address required in the schema, a transfer without
+    // it is rejected at schema stage (P0.3) before ever reaching the referee.
+    // This test bypasses the schema to verify the referee rule's own defensive
+    // guard is also present — belt-and-suspenders for defense in depth.
+    const baseTransfer = transferIntent({ target_address: DEAD });
+    const intentNoTarget = { ...baseTransfer, target_address: undefined } as unknown as Parameters<typeof transferBlockRule>[0];
+    const r = transferBlockRule(intentNoTarget, cleanState(), POLICY);
     expect(r).toMatchObject({ decision: 'REJECT', severity: 'hard' });
     expect((r!.detail as { reason: string }).reason).toBe('missing_target_address');
   });

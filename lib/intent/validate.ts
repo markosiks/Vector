@@ -212,6 +212,10 @@ function checkBounds(intent: Intent): ValidationFailure | null {
     if (!inUnitInterval(intent.max_slippage)) {
       return fail('bounds', 'slippage_out_of_range', 'max_slippage must be within [0, 1]');
     }
+    // max_slippage = "0" (exact-price-match) is intentionally allowed here (I-07).
+    // Such an intent will fail execution at the venue (no fill possible), but
+    // that is an execution concern, not a structural one. External integrators
+    // should document that zero-slippage intents are unlikely to be filled.
     if (exceedsScale('max_slippage', intent.max_slippage)) {
       return fail(
         'bounds',

@@ -140,6 +140,9 @@ function compareMagnitude(a: string, b: string): -1 | 0 | 1 {
  * rejecting a legitimate Intent as a replay. Such values are rejected so callers
  * use a string nonce for large/opaque values.
  */
+/** Maximum byte length of a string nonce — guards unauthenticated amplification (I-01). */
+export const MAX_NONCE_LENGTH = 256;
+
 export function normalizeNonce(nonce: string | number): string {
   if (typeof nonce === 'number') {
     if (!Number.isInteger(nonce)) throw new RangeError('numeric nonce must be an integer');
@@ -149,6 +152,9 @@ export function normalizeNonce(nonce: string | number): string {
     return String(nonce);
   }
   if (nonce.length === 0) throw new RangeError('nonce must not be empty');
+  if (nonce.length > MAX_NONCE_LENGTH) {
+    throw new RangeError(`nonce must not exceed ${MAX_NONCE_LENGTH} characters`);
+  }
   return nonce;
 }
 
@@ -185,6 +191,11 @@ export function normalizeTimestamp(ttl: string | number): string {
  */
 export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
+    // BigInt is not JSON-serializable; guard explicitly so the caller gets a
+    // clear error instead of an uncaught TypeError from JSON.stringify (I-06).
+    if (typeof value === 'bigint') {
+      throw new TypeError(`stableStringify: BigInt values are not supported (${value})`);
+    }
     return JSON.stringify(value) ?? 'null';
   }
   if (Array.isArray(value)) {
