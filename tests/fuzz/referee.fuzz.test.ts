@@ -90,6 +90,7 @@ function randomState(r: () => number): RefereeState {
       allocation: String(alloc),
       remaining_budget: String(Math.floor(r() * (alloc + 1))),
       drawdown: (r() * 0.6).toFixed(4),
+      ...(r() < 0.1 ? { halted: true } : {}),
     },
     ...(r() < 0.5
       ? {
@@ -119,9 +120,9 @@ describe('referee fuzz — domain & severity invariants', () => {
       if (res.severity === 'hard') {
         expect(['market_whitelist', 'fresh_wallet_transfer_block']).toContain(res.rule_fired);
       }
-      // HALT only from kill switch / drawdown
+      // HALT only from kill switch, agent halt, or drawdown
       if (res.decision === 'HALT') {
-        expect(['kill_switch', 'drawdown_breaker']).toContain(res.rule_fired);
+        expect(['kill_switch', 'agent_halt', 'drawdown_breaker']).toContain(res.rule_fired);
       }
       // CLIP carries a modified intent; non-CLIP never does
       if (res.decision === 'CLIP') {
