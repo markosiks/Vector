@@ -40,6 +40,8 @@ import { runArc, setupArc } from '@/lib/replay';
 import { mirrorAttestation } from '@/lib/attestation/pipeline';
 import { submitAndReconcile } from '@/lib/attestation/pipeline';
 import { getAttestorAddress, getFeedbackWriteClient, getIdentityReader, getReceiptReader } from '@/lib/chain/client';
+import { loadNansenSignalProvider } from '@/lib/signals/nansen/load';
+import { loadElfaSignalProvider } from '@/lib/signals/elfa/load';
 import { buildDemoArc } from '@/seed';
 
 const PORT = Number(process.env.ARENA_LIVE_PORT ?? 3100);
@@ -148,7 +150,15 @@ async function main(): Promise<number> {
     arc = (async () => {
       const go = await started;
       if (!go) return;
+      // Live market signals (P2.2 Nansen, P3.1 Elfa). Both are fail-open and
+      // read-only into agent `context.signals`: with no keys configured Nansen
+      // is a no-op (`null`) and Elfa serves its deterministic seeded mock, so
+      // the arc stays byte-identical until a deployment opts in via env.
+      const nansen = loadNansenSignalProvider();
+      const elfa = loadElfaSignalProvider();
       await runArc(db, demoArc, {
+        ...(nansen === null ? {} : { nansen }),
+        elfa,
         hooks: {
           onAttest: async (event) => {
             // Mirror the scored round into an optimistic attestation row,

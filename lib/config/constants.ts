@@ -60,7 +60,7 @@ const RAW_CONFIG = {
   },
   // ── Elfa social signal (P3.1) ───────────────────────────────────────────
   elfa: {
-    mode: 'mock',
+    mode: 'real',
     endpoint: 'https://api.elfa.ai',
     cache_ttl_ms: 60_000,
     poll_every_n_ticks: 15,

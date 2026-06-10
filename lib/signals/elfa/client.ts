@@ -25,6 +25,12 @@ import type { ElfaSentiment, ElfaSignal } from './types';
  */
 export const ELFA_TRENDING_PATH = '/v2/aggregations/trending-tokens';
 
+/**
+ * The live endpoint *requires* a time window (400 without one). 24h keeps the
+ * snapshot stable across the slow poll cadence while still being "current".
+ */
+export const ELFA_TIME_WINDOW = '24h';
+
 /** Default per-request wall-clock timeout. */
 const DEFAULT_TIMEOUT_MS = 5_000;
 
@@ -145,9 +151,13 @@ const sentimentRowSchema = z
     sentimentScore: numericString.optional(),
     sentiment_score: numericString.optional(),
     score: numericString.optional(),
+    // Live v2 shape (2026): no explicit sentiment on this tier; the 24h mention
+    // momentum (`change_percent`) is the closest signed "crowd direction" proxy.
+    change_percent: numericString.optional(),
     mentions: numericString.optional(),
     mentionsCount: numericString.optional(),
     mentions_count: numericString.optional(),
+    current_count: numericString.optional(),
     mindshare: numericString.optional(),
   })
   .passthrough();
@@ -160,11 +170,12 @@ function extractRows(payload: unknown): unknown[] {
     for (const key of ['data', 'result', 'results', 'rows', 'tokens'] as const) {
       if (Array.isArray(obj[key])) return obj[key] as unknown[];
     }
-    // Elfa v2 sometimes nests the array one level deeper, e.g. `{ data: { items: [...] } }`.
+    // Elfa v2 nests the array one level deeper, e.g. `{ data: { data: [...] } }`
+    // (live 2026 shape) or `{ data: { items: [...] } }`.
     const data = obj.data;
     if (data !== null && typeof data === 'object') {
       const inner = data as Record<string, unknown>;
-      for (const key of ['items', 'tokens', 'results', 'rows'] as const) {
+      for (const key of ['data', 'items', 'tokens', 'results', 'rows'] as const) {
         if (Array.isArray(inner[key])) return inner[key] as unknown[];
       }
     }
@@ -177,12 +188,13 @@ function normalizeRow(raw: unknown): ElfaSentiment | null {
   const parsed = sentimentRowSchema.safeParse(raw);
   if (!parsed.success) return null;
   const r = parsed.data;
-  const sentiment = r.sentiment ?? r.sentimentScore ?? r.sentiment_score ?? r.score;
+  const sentiment =
+    r.sentiment ?? r.sentimentScore ?? r.sentiment_score ?? r.score ?? r.change_percent;
   if (sentiment === undefined) return null; // No usable signal value: drop the row.
 
   const symbol = r.symbol ?? r.tokenSymbol ?? r.token;
   const tokenAddress = r.tokenAddress ?? r.token_address ?? r.address;
-  const mentions = r.mentions ?? r.mentionsCount ?? r.mentions_count;
+  const mentions = r.mentions ?? r.mentionsCount ?? r.mentions_count ?? r.current_count;
   return {
     ...(symbol === undefined ? {} : { symbol }),
     ...(tokenAddress === undefined ? {} : { tokenAddress }),
@@ -237,7 +249,9 @@ export function createElfaClient(deps: ElfaClientDeps): ElfaClient {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const now = deps.now ?? Date.now;
   const maxRows = deps.maxRows ?? DEFAULT_MAX_ROWS;
-  const url = new URL(ELFA_TRENDING_PATH, deps.endpoint).toString();
+  const urlObject = new URL(ELFA_TRENDING_PATH, deps.endpoint);
+  urlObject.searchParams.set('timeWindow', ELFA_TIME_WINDOW);
+  const url = urlObject.toString();
 
   async function fetchSignal(): Promise<ElfaSignal> {
     const controller = new AbortController();
