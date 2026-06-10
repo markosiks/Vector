@@ -196,7 +196,10 @@ export const policyEventDto = z.object({
   rule_fired: z.string(),
   decision: z.enum(POLICY_DECISION),
   severity: z.enum(POLICY_SEVERITY),
-  detail: z.unknown(),
+  // Typed as a string-keyed record rather than z.unknown() to prevent silent
+  // passthrough of any future sensitive fields stored in detail_json (F-05).
+  // Non-object values (null, primitives) are preserved as-is.
+  detail: z.union([z.record(z.string(), z.unknown()), z.null()]),
   created_at: isoTime,
 });
 export type PolicyEventDto = z.infer<typeof policyEventDto>;
@@ -210,7 +213,9 @@ export function toPolicyEventDto(e: PolicyEventRow): PolicyEventDto {
     rule_fired: e.rule_fired,
     decision: e.decision,
     severity: e.severity,
-    detail: e.detail_json,
+    // Cast: detail_json is an object stored by the referee; the DTO type
+    // narrows it to Record<string,unknown>|null for forward-safety (F-05).
+    detail: e.detail_json as Record<string, unknown> | null,
     created_at: iso(e.created_at),
   };
 }
@@ -350,7 +355,10 @@ export const operatorActionDto = z.object({
   kind: z.enum(OPERATOR_ACTION_KIND),
   actor: z.string(),
   agent_id: z.string().uuid().nullable(),
-  detail: z.unknown(),
+  // Typed as a string-keyed record rather than z.unknown() to prevent silent
+  // passthrough of any future sensitive fields stored in detail_json (F-05).
+  // Non-object values (null, primitives) are preserved as-is.
+  detail: z.union([z.record(z.string(), z.unknown()), z.null()]),
   created_at: isoTime,
 });
 export type OperatorActionDto = z.infer<typeof operatorActionDto>;
@@ -361,7 +369,9 @@ export function toOperatorActionDto(a: OperatorActionRow): OperatorActionDto {
     kind: a.kind,
     actor: a.actor,
     agent_id: a.agent_id,
-    detail: a.detail_json,
+    // Cast: detail_json is an object stored by the operator layer; the DTO
+    // type narrows it to Record<string,unknown>|null for forward-safety (F-05).
+    detail: a.detail_json as Record<string, unknown> | null,
     created_at: iso(a.created_at),
   };
 }

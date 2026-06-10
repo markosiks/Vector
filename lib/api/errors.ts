@@ -58,6 +58,14 @@ export class NotFoundError extends ApiError {
   }
 }
 
+/** 429 — the client has exceeded the allowed request rate. */
+export class TooManyRequestsError extends ApiError {
+  constructor(message = 'Too many requests', code = 'too_many_requests') {
+    super(429, code, message);
+    this.name = 'TooManyRequestsError';
+  }
+}
+
 /** The stable JSON error body. Only `code` + `message` ever cross the boundary. */
 export interface ErrorBody {
   readonly error: { readonly code: string; readonly message: string };
