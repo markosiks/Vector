@@ -27,6 +27,7 @@ const ID = {
 
 /** Tables in reverse-FK order, used by `resetData`'s single TRUNCATE. */
 const ALL_TABLES = [
+  'operator_actions',
   'kill_switch',
   'attestations',
   'capital_allocations',
