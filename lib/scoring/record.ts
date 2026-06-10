@@ -4,6 +4,7 @@ import { getLatestScoreByAgent, getScoreByAgentRound, insertScore } from '@/lib/
 import type { AgentRow, OutcomeRow, PolicyEventRow, ScoreRow } from '@/lib/db/schema';
 import type { Queryable } from '@/lib/db/types';
 import { FRESH_WALLET_TRANSFER_BLOCK_RULE } from '@/lib/referee/rules/transfer-block';
+import { SEVERITY_RANK } from '@/lib/referee/severity';
 
 import { score, type ScoringConfig } from './score';
 import type { ScoreInputs, ScoreResult } from './types';
@@ -21,8 +22,7 @@ const DRAIN_RULE = FRESH_WALLET_TRANSFER_BLOCK_RULE;
  */
 const META_RULES: ReadonlySet<string> = new Set(['internal_error', 'pre_validation', 'allow']);
 
-/** Orders severities so the worst decision per intent dominates (§6.3). */
-const SEVERITY_RANK: Record<string, number> = { none: 0, soft: 1, hard: 2, halt: 3 };
+// SEVERITY_RANK is imported from lib/referee/severity.ts — single source of truth (S7).
 
 /**
  * Reduce one round's persisted facts into {@link ScoreInputs}.
@@ -131,14 +131,22 @@ export interface RecordScoreResult {
  * (the source of truth), not the recomputed value.
  *
  * Concurrency / atomicity: this is a read-modify-write (prior → score → gate).
- * A caller running concurrent rounds for the same agent **must** pass a single
- * transaction-bound client and serialize the agent (e.g. `SELECT … FOR UPDATE`
- * on the `agents` row) so the EWMA prior cannot be read stale; passing the
- * shared pool is unsafe for that case. P1.2 ships no such caller yet.
+ * A `SELECT … FOR UPDATE` on the `agents` row is acquired at the top of each
+ * call so concurrent rounds for the same agent are serialized and the EWMA
+ * prior is never read stale. The lock is a no-op on a non-transactional pool
+ * client (Postgres releases it immediately), but it is correct in both cases:
+ * inside a transaction it serializes; outside a transaction it is advisory
+ * (best-effort). Callers that need hard serializability must pass a transaction-
+ * bound client. (S1 fix)
  */
 export async function recordScore(args: RecordScoreArgs): Promise<RecordScoreResult> {
   const scoring = args.scoring ?? CONFIG.scoring;
   const sMin = args.sMin ?? CONFIG.router.s_min;
+
+  // S1: Acquire a row-level lock on the agent before reading the EWMA prior.
+  // This serializes concurrent `recordScore` calls for the same agent when
+  // they share a transaction-bound client, preventing stale-prior races.
+  await args.db.query('SELECT id FROM agents WHERE id = $1 FOR UPDATE', [args.agentId]);
 
   const prevScore = args.prevScore ?? (await previousScore(args.db, args.agentId, scoring));
   const result = score(args.inputs, prevScore, scoring);

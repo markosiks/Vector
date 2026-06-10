@@ -47,8 +47,18 @@ export function safeComponents(input: unknown): ScoreComponents | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** The role of a term in the `100·perf·w + policy − dd` composition. */
-export type TermRole = 'factor' | 'add' | 'subtract';
+/**
+ * The role of a term in the `100·perf·w + policy − dd` composition.
+ *
+ * - `factor`     – multiplied (perf, w); always in `[0, 1]`.
+ * - `signed_add` – algebraically added, **may be negative** (policy); UI must
+ *                  read the `value` sign to choose colour — do not assume green.
+ * - `subtract`   – always subtracted (dd); always non-negative.
+ *
+ * `signed_add` replaces the former `'add'` to make it explicit that the term's
+ * value can be a large negative number (e.g. −60 for a halt penalty). (S5 fix)
+ */
+export type TermRole = 'factor' | 'signed_add' | 'subtract';
 
 /** One line of the breakdown the UI renders. */
 export interface BreakdownTerm {
@@ -151,7 +161,7 @@ export function buildBreakdown(c: ScoreComponents): ScoreBreakdown {
     terms: [
       { key: 'perf', label: 'Performance', value: c.perf, role: 'factor' },
       { key: 'w', label: 'Capital weight', value: c.w, role: 'factor' },
-      { key: 'policy', label: 'Policy', value: c.policy, role: 'add' },
+      { key: 'policy', label: 'Policy', value: c.policy, role: 'signed_add' },
       { key: 'dd', label: 'Drawdown', value: c.dd, role: 'subtract' },
     ],
     resultFillPct: round6(clamp(raw / 100, 0, 1) * 100),

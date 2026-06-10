@@ -1,5 +1,6 @@
 import type { IntentDto, PolicyEventDto } from '@/lib/api/dto';
 import type { PolicyDecision, PolicySeverity } from '@/lib/db/schema';
+import { SEVERITY_RANK as _SEVERITY_RANK } from '@/lib/referee/severity';
 
 /**
  * Correlate an agent's recent intents with the referee decisions on them, for
@@ -22,13 +23,9 @@ const DECISION_RANK: Record<PolicyDecision, number> = {
   HALT: 3,
 };
 
-/** Severity precedence, worst-last — the tie-break within one decision. */
-const SEVERITY_RANK: Record<PolicySeverity, number> = {
-  none: 0,
-  soft: 1,
-  hard: 2,
-  halt: 3,
-};
+/** Severity precedence, worst-last — the tie-break within one decision.
+ *  Re-exported from the shared source of truth (lib/referee/severity.ts, S7). */
+const SEVERITY_RANK: Record<PolicySeverity, number> = _SEVERITY_RANK as Record<PolicySeverity, number>;
 
 export function decisionRank(d: PolicyDecision): number {
   return DECISION_RANK[d] ?? 0;
