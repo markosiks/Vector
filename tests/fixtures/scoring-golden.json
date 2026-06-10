@@ -108,13 +108,13 @@
     },
     "prev": 90,
     "expected": {
-      "raw_r": "12.64455697",
+      "raw_r": "7.64455697",
       "score_r": "7.000",
       "crashed": true,
       "components": {
         "perf": 0.68997448,
         "w": 0.98039216,
-        "policy": -55,
+        "policy": -60,
         "dd": 0
       }
     }

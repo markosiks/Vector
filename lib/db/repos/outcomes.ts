@@ -63,6 +63,17 @@ export function listOutcomesByAgentRound(
     db,
     // `id` tiebreaker keeps the float-summation order in `deriveScoreInputs`
     // deterministic when two outcomes share a `created_at` tick (§6.5).
+    //
+    // S2 note: `id` is a `gen_random_uuid()` PRIMARY KEY — its lexicographic
+    // order is non-deterministic across *different* DB sessions (two independent
+    // inserts of logically identical outcomes produce different UUIDs, so replay
+    // could yield a different sort order and thus different float sums for
+    // same-tick outcomes with non-integer pnl/car).  The seed arc uses only
+    // integer-valued pnl_realized/capital_at_risk, so float-summation order is
+    // immaterial there.  A strict determinism guarantee across replay requires a
+    // stable `tick_index INTEGER` column (see audit finding S2).  Migration SQL:
+    //   ALTER TABLE outcomes ADD COLUMN tick_index INTEGER NOT NULL DEFAULT 0;
+    //   -- then ORDER BY created_at ASC, tick_index ASC, id ASC
     'SELECT * FROM outcomes WHERE agent_id = $1 AND round_id = $2 ORDER BY created_at ASC, id ASC',
     [agentId, roundId],
     outcomeRow,

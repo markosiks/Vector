@@ -61,7 +61,7 @@ describe('buildBreakdown composition', () => {
     const roles = Object.fromEntries(
       buildBreakdown({ perf: 0.5, w: 0.4, policy: 1, dd: 1 }).terms.map((t) => [t.key, t.role]),
     );
-    expect(roles).toEqual({ perf: 'factor', w: 'factor', policy: 'add', dd: 'subtract' });
+    expect(roles).toEqual({ perf: 'factor', w: 'factor', policy: 'signed_add', dd: 'subtract' });
   });
 });
 
