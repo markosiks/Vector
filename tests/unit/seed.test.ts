@@ -30,4 +30,23 @@ describe('resetData', () => {
     await resetData(db);
     expect(db.truncated).toBe(true);
   });
+
+  test('operator_actions is explicitly listed in the TRUNCATE statement (DB-1)', async () => {
+    /** Capture the exact TRUNCATE SQL so we can assert the table list is complete. */
+    class CapturingDb implements Queryable {
+      public truncateSql = '';
+      async query<R = Record<string, unknown>>(
+        sql: string,
+      ): Promise<{ rows: R[]; rowCount: number | null }> {
+        if (sql.includes('current_schema')) {
+          return { rows: [{ schema: 'vec_test_reg' } as R], rowCount: 1 };
+        }
+        if (sql.startsWith('TRUNCATE')) this.truncateSql = sql;
+        return { rows: [], rowCount: 0 };
+      }
+    }
+    const db = new CapturingDb();
+    await resetData(db);
+    expect(db.truncateSql).toContain('operator_actions');
+  });
 });

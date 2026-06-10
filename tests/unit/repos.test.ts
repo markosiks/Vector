@@ -202,4 +202,12 @@ describe('setKillSwitch', () => {
     await setKillSwitch(db, { active: false });
     expect(db.last?.params).toEqual([false, null, null]);
   });
+
+  test('throws a clear diagnostic when the upsert returns no row (DB-3)', async () => {
+    // Simulate a driver/DDL mismatch where RETURNING yields zero rows.
+    const db = new FakeDb([]);
+    await expect(setKillSwitch(db, { active: true })).rejects.toThrow(
+      'setKillSwitch: INSERT ON CONFLICT DO UPDATE returned no row',
+    );
+  });
 });

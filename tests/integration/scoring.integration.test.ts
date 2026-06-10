@@ -10,7 +10,7 @@ import { insertIntent } from '@/lib/db/repos/intents';
 import { insertOutcome, listOutcomesByAgentRound } from '@/lib/db/repos/outcomes';
 import { insertPolicyEvent, listPolicyEventsByAgentRound } from '@/lib/db/repos/policy-events';
 import { insertRound } from '@/lib/db/repos/rounds';
-import { listScoresByAgent } from '@/lib/db/repos/scores';
+import { listScoreHistoryByAgent } from '@/lib/db/repos/scores';
 import type { Queryable } from '@/lib/db/types';
 import { deriveScoreInputs, recordScore } from '@/lib/scoring/record';
 
@@ -109,7 +109,7 @@ describeDb('scoring engine (isolated schema on real Neon)', () => {
 
     const { result } = await recordScore({ db, agentId, roundId, inputs });
 
-    const persisted = await listScoresByAgent(db, agentId);
+    const persisted = await listScoreHistoryByAgent(db, agentId);
     expect(persisted).toHaveLength(1);
     expect(persisted[0]!.score_r).toBe(result.score_r);
     expect(persisted[0]!.raw_r).toBe(result.raw_r);
@@ -186,7 +186,7 @@ describeDb('scoring engine (isolated schema on real Neon)', () => {
     for (let i = 1; i < scoresSeen.length; i += 1) {
       expect(scoresSeen[i]!).toBeGreaterThan(scoresSeen[i - 1]!);
     }
-    const history = await listScoresByAgent(db, agent.id);
+    const history = await listScoreHistoryByAgent(db, agent.id);
     expect(history).toHaveLength(4);
   });
 });
