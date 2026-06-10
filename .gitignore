@@ -153,3 +153,4 @@ temp/
 docs/_generated/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+.vercel
