@@ -175,3 +175,36 @@ describe('seeded config — single instance', () => {
     expect(a).toBe(CONFIG);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression tests for audit findings C-05, C-08
+// ---------------------------------------------------------------------------
+
+describe('derive.ts — C-05: explorerTxUrl is the validated version', () => {
+  test('returns null for an invalid (non-hex) tx hash', async () => {
+    const { explorerTxUrl } = await import('@/lib/config/derive');
+    expect(explorerTxUrl('0xabc')).toBeNull();
+    expect(explorerTxUrl('not-a-hash')).toBeNull();
+    expect(explorerTxUrl(null)).toBeNull();
+  });
+
+  test('returns a well-formed URL for a valid 32-byte tx hash', async () => {
+    const { explorerTxUrl } = await import('@/lib/config/derive');
+    const hash = `0x${'ab'.repeat(32)}`;
+    const url = explorerTxUrl(hash);
+    expect(url).not.toBeNull();
+    expect(url).toContain(`/tx/${hash}`);
+  });
+});
+
+describe('deepFreeze — C-08: Symbol-keyed properties are also frozen', () => {
+  test('Symbol-keyed property on a frozen object cannot be mutated', async () => {
+    const { deepFreeze } = await import('@/lib/utils/deep-freeze');
+    const sym = Symbol('test');
+    const obj: Record<string | symbol, unknown> = { [sym]: 42, normal: 'value' };
+    deepFreeze(obj);
+    expect(() => {
+      obj[sym] = 99;
+    }).toThrow();
+  });
+});

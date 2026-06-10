@@ -115,3 +115,93 @@ describe('parseEnv — error messages never leak secret values', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression tests for audit findings C-03 and C-04
+// ---------------------------------------------------------------------------
+
+// VALID_DB is already declared at the top of this file.
+const VALID_KEY_A = `0x${'aa'.repeat(32)}` as const;
+const VALID_KEY_B = `0x${'bb'.repeat(32)}` as const;
+
+describe('parseEnv — C-03: private key hex format validation', () => {
+  test('rejects a non-hex private key value', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: 'not-a-hex-key' }),
+    ).toThrow(EnvValidationError);
+  });
+
+  test('rejects a key missing the 0x prefix', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: 'aa'.repeat(32) }),
+    ).toThrow(EnvValidationError);
+  });
+
+  test('rejects a key that is too short (< 64 hex chars after 0x)', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: `0x${'aa'.repeat(16)}` }),
+    ).toThrow(EnvValidationError);
+  });
+
+  test('rejects a key that is too long (> 64 hex chars after 0x)', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: `0x${'aa'.repeat(33)}` }),
+    ).toThrow(EnvValidationError);
+  });
+
+  test('accepts a well-formed 32-byte hex OPERATOR_PRIVATE_KEY', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: VALID_KEY_A }),
+    ).not.toThrow();
+  });
+
+  test('accepts a well-formed 32-byte hex ATTESTOR_PRIVATE_KEY', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, ATTESTOR_PRIVATE_KEY: VALID_KEY_B }),
+    ).not.toThrow();
+  });
+
+  test('error message for a malformed key names the variable but not the value', () => {
+    const bad = 'not-a-key-SUPERSECRET';
+    try {
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: bad });
+      throw new Error('expected parseEnv to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(EnvValidationError);
+      const msg = (err as EnvValidationError).message;
+      expect(msg).toContain('OPERATOR_PRIVATE_KEY');
+      expect(msg).not.toContain('SUPERSECRET');
+    }
+  });
+});
+
+describe('parseEnv — C-04: distinct signer address invariant', () => {
+  test('rejects OPERATOR and ATTESTOR set to the same private key', () => {
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: VALID_DB,
+        OPERATOR_PRIVATE_KEY: VALID_KEY_A,
+        ATTESTOR_PRIVATE_KEY: VALID_KEY_A,
+      }),
+    ).toThrow(EnvValidationError);
+  });
+
+  test('accepts OPERATOR and ATTESTOR set to different private keys', () => {
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: VALID_DB,
+        OPERATOR_PRIVATE_KEY: VALID_KEY_A,
+        ATTESTOR_PRIVATE_KEY: VALID_KEY_B,
+      }),
+    ).not.toThrow();
+  });
+
+  test('passes when only one key is set (no cross-field check needed)', () => {
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, OPERATOR_PRIVATE_KEY: VALID_KEY_A }),
+    ).not.toThrow();
+    expect(() =>
+      parseEnv({ DATABASE_URL: VALID_DB, ATTESTOR_PRIVATE_KEY: VALID_KEY_B }),
+    ).not.toThrow();
+  });
+});

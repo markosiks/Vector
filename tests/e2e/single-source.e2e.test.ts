@@ -75,10 +75,18 @@ describe('single source of truth — structural (no hardcoded duplicates)', () =
   });
 });
 
+// A well-formed 32-byte tx hash required by the validated explorerTxUrl.
+const VALID_TX = `0x${'ab'.repeat(32)}` as const;
+
 describe('single source of truth — behavioral (consumers track CONFIG)', () => {
   test('derived values are recomputable purely from CONFIG', () => {
     expect(swrRefreshIntervalMs()).toBe(CONFIG.timing.ui_poll_ms);
-    expect(explorerTxUrl('0xabc')).toBe(`${CONFIG.chain.mantle_explorer_base_url}/tx/0xabc`);
+    // explorerTxUrl (re-exported from lib/credibility/explorer) validates the
+    // hash and returns null for invalid input; a valid 32-byte hash must return
+    // the expected URL.
+    expect(explorerTxUrl(VALID_TX)).toBe(
+      `${CONFIG.chain.mantle_explorer_base_url}/tx/${VALID_TX}`,
+    );
   });
 
   test('the eligibility gate hinges exactly on CONFIG.router.s_min', () => {
