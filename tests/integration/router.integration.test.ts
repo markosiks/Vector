@@ -10,6 +10,7 @@ import { insertRound } from '@/lib/db/repos/rounds';
 import type { Queryable } from '@/lib/db/types';
 import { deriveRouterAgents, loadPrevAllocations, recordRoute } from '@/lib/router/record';
 import type { RouterState } from '@/lib/router/types';
+import { amountUnits } from '@/tests/helpers/router';
 
 /**
  * Integration: `agents` cache → `route()` → write `capital_allocations` → read
@@ -22,11 +23,6 @@ const hasDb = typeof process.env.DATABASE_URL === 'string' && process.env.DATABA
 const describeDb = hasDb ? describe : describe.skip;
 
 const POOL_UNITS = 10n ** 24n;
-
-function amountUnits(a: string): bigint {
-  const [i, f = ''] = a.split('.');
-  return BigInt((i ?? '0') + f.padEnd(18, '0').slice(0, 18));
-}
 
 describeDb('capital router persistence (isolated schema on real Neon)', () => {
   const schema = `vec_test_${randomUUID().replace(/-/g, '')}`;

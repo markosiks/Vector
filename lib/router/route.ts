@@ -272,7 +272,9 @@ export function route(
 
   const nextState: RouterState = {
     tick: state.tick,
-    cooldownUntilTick: largeMove ? state.tick + cooldown_ticks : state.cooldownUntilTick,
+    cooldownUntilTick: largeMove
+      ? Math.max(state.cooldownUntilTick, state.tick + cooldown_ticks)
+      : state.cooldownUntilTick,
   };
 
   return { allocations, state: nextState };

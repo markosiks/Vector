@@ -9,6 +9,7 @@ import type {
   RouterConfig,
   RouterState,
 } from '@/lib/router/types';
+import { amountUnits } from '@/tests/helpers/router';
 
 /**
  * End-to-end stress for the capital router: long deterministic simulations that
@@ -20,10 +21,6 @@ import type {
 const CFG: RouterConfig = { ...CONFIG.router, pool_size: CONFIG.capital.pool_size };
 const POOL_UNITS = 10n ** 24n;
 
-function amountUnits(a: string): bigint {
-  const [i, f = ''] = a.split('.');
-  return BigInt((i ?? '0') + f.padEnd(18, '0').slice(0, 18));
-}
 function totalUnits(allocs: readonly Allocation[]): bigint {
   return allocs.reduce((acc, a) => acc + amountUnits(a.amount), 0n);
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { route } from '@/lib/router/route';
 import type { PrevAllocation, RouterAgent, RouterConfig, RouterState } from '@/lib/router/types';
+import { amountUnits } from '@/tests/helpers/router';
 
 import golden from '@/tests/fixtures/router-golden.json';
 
@@ -28,11 +29,6 @@ interface GoldenStep {
 
 const fixture = golden as unknown as { config: RouterConfig; steps: GoldenStep[] };
 const POOL_UNITS = 10n ** 24n;
-
-function amountUnits(a: string): bigint {
-  const [i, f = ''] = a.split('.');
-  return BigInt((i ?? '0') + f.padEnd(18, '0').slice(0, 18));
-}
 
 describe('router golden — the deterministic demo arc', () => {
   for (const step of fixture.steps) {

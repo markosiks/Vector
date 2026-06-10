@@ -249,6 +249,35 @@ describe('route — round-0 bootstrap', () => {
   });
 });
 
+describe('route — cooldownUntilTick is never shortened by a forced move (R-02 regression)', () => {
+  test('a forced move occurring during a longer cooldown does not shorten it', () => {
+    // R-02: cooldownUntilTick was always set to state.tick + cooldown_ticks on a
+    // largeMove, with no max() guard. A forced move at tick T when an already-longer
+    // cooldown (e.g. until tick T+C+10) was active would shorten it to T+C.
+    // Fix: Math.max(state.cooldownUntilTick, state.tick + cooldown_ticks).
+    const agents = [
+      agent('a', 80),
+      agent('b', 60, { crashed: true }), // forced gate-out triggers largeMove
+    ];
+    const prev: PrevAllocation[] = [
+      { agentId: 'a', amount: '500000.000000000000000000', weight: '0.50000000' },
+      { agentId: 'b', amount: '500000.000000000000000000', weight: '0.50000000' },
+    ];
+    // The existing cooldown expires at tick 999; cooldown_ticks is much smaller.
+    const existingCooldown = 999;
+    const { state } = route(agents, prev, { tick: 10, cooldownUntilTick: existingCooldown }, CFG, 'crash');
+    // The forced move must NOT shorten the active cooldown.
+    expect(state.cooldownUntilTick).toBeGreaterThanOrEqual(existingCooldown);
+  });
+
+  test('a largeMove on a fresh state extends the cooldown normally', () => {
+    const agents = [agent('a', 80), agent('b', 60)];
+    const { state } = route(agents, [], { tick: 5, cooldownUntilTick: 0 }, CFG, 'settle');
+    // Cold start ⇒ largeMove ⇒ cooldown set to tick + cooldown_ticks.
+    expect(state.cooldownUntilTick).toBe(5 + CFG.cooldown_ticks);
+  });
+});
+
 describe('route — edge cases and invariants', () => {
   test('no agents yields no allocations and leaves state untouched', () => {
     const state = { tick: 5, cooldownUntilTick: 9 };
