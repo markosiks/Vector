@@ -35,6 +35,7 @@ import { keccak256, toBytes, type Address, type Hex } from 'viem';
 import { CONFIG } from '@/lib/config/constants';
 import { ENV } from '@/lib/config/env';
 import { canonicalJson } from '@/lib/attestation/build';
+import { encodeScoreValue, VALUE_DECIMALS } from '@/lib/attestation/encode';
 import { assertCanAttest, registerAgent } from '@/lib/chain/identity';
 import {
   getAttestorAddress,
@@ -128,8 +129,10 @@ async function main(): Promise<void> {
 
   // 3) Build the off-chain feedback detail + its on-chain integrity hash using
   //    the project's canonical encoder (no bespoke serialization/hash).
-  const value = BigInt(process.env.SCORE_VALUE ?? '73500'); // 73.500 at 3 decimals
-  const valueDecimals = Number(process.env.SCORE_DECIMALS ?? '3');
+  // Use the canonical encoder: encodeScoreValue('73.500') rounds to 74 (integer
+  // 0..100); VALUE_DECIMALS = 0 — no more hardcoded 73500/3 bypassing the encoder.
+  const value = encodeScoreValue('73.500'); // => 74n (integer, decimals=0)
+  const valueDecimals = VALUE_DECIMALS; // => 0
   const detail = {
     schema: 'vector.attestation.detail/1',
     agent: { seed_id: seedId, onchain_id: agentId.toString() },
