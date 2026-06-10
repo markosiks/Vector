@@ -1,0 +1,120 @@
+/* Health screen styling. Same dark palette as the rest of the app. */
+
+.screen {
+  --bg: #0a0e17;
+  --panel: #121826;
+  --edge: #1f2a3d;
+  --text: #e8eef9;
+  --muted: #8a98b3;
+  --pos: #36d399;
+  --neg: #ff5a5f;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: clamp(1.25rem, 4vw, 4rem) clamp(1rem, 4vw, 2rem);
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.inner {
+  max-width: 36rem;
+  margin: 0 auto;
+}
+
+.title {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.error {
+  border: 1px solid color-mix(in srgb, var(--neg) 45%, var(--edge));
+  background: rgba(255, 90, 95, 0.08);
+  border-radius: 10px;
+  padding: 0.85rem 1.1rem;
+}
+
+.card {
+  margin: 0;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.1rem;
+  border-bottom: 1px solid var(--edge);
+  font-size: 0.95rem;
+}
+
+.card > div:last-child {
+  border-bottom: none;
+}
+
+.card dt {
+  margin: 0;
+  color: var(--muted);
+}
+
+.card dd {
+  margin: 0;
+  text-align: right;
+}
+
+.mono {
+  font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-size: 0.85rem;
+}
+
+.pillDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pillUp {
+  color: var(--pos);
+  border-color: color-mix(in srgb, var(--pos) 40%, var(--edge));
+}
+
+.pillDown {
+  color: var(--neg);
+  border-color: color-mix(in srgb, var(--neg) 40%, var(--edge));
+}
