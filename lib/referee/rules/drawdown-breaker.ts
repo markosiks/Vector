@@ -3,7 +3,7 @@ import { compareDecimal } from '@/lib/intent/canonical';
 import type { Rule } from '../types';
 
 /**
- * Rule 7 — Drawdown circuit-breaker.
+ * Rule 4 — Drawdown circuit-breaker.
  *
  * When the agent's intra-round drawdown reaches the breaker threshold
  * (`drawdown >= dd_breaker`) the agent is halted (gated out) for the round. A
@@ -11,8 +11,7 @@ import type { Rule } from '../types';
  * — which is the fail-safe choice for a risk control (contrast the size/leverage
  * caps, where the cap value itself is permitted).
  *
- * Runs last in the ordered set: an Intent that already trips an earlier rule is
- * decided there first.
+ * Rule #5 (`spend_cap` reject branch) follows in the blocking phase.
  */
 export const drawdownBreakerRule: Rule = (_intent, state, config) => {
   if (compareDecimal(state.agent.drawdown, config.dd_breaker) < 0) return null;

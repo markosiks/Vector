@@ -1,7 +1,7 @@
 import { compareDecimal } from '@/lib/intent/canonical';
 import { isTradeAction } from '@/lib/intent/types';
 
-import type { Rule } from '../types';
+import type { ClipRule, Rule } from '../types';
 import { clipNumericField } from './_shared';
 
 /**
@@ -23,7 +23,7 @@ const detailBase = (
   size: intent.size,
   remaining_budget: state.agent.remaining_budget,
   allocation: state.agent.allocation,
-  spend_cap: config.spend_cap,
+  spend_cap: config.spend_cap, // logged for audit only; does not gate (see docs/referee.md "Caller contract")
 });
 
 /**
@@ -47,7 +47,7 @@ export const spendCapRejectRule: Rule = (intent, state, config) => {
  * size is reduced to the remaining budget (`soft`). Runs in the clipping phase
  * alongside the size/leverage caps so every breached cap is clamped together.
  */
-export const spendCapClipRule: Rule = (intent, state, config) => {
+export const spendCapClipRule: ClipRule = (intent, state, config) => {
   if (!isTradeAction(intent.action)) return null;
   const remaining = state.agent.remaining_budget;
   if (compareDecimal(remaining, 0) <= 0) return null; // handled by spendCapRejectRule
