@@ -110,7 +110,7 @@ export default function OnboardingPage(): ReactNode {
           <p>
             Signing is <strong>EIP-191 personal_sign</strong> over the UTF-8 canonical payload;{' '}
             <code>intent_hash = keccak256(utf8(canonical_payload))</code>. (ERC-1271
-            contract-account signatures are [ROADMAP].)
+            contract-account signatures are on the roadmap.)
           </p>
         </section>
 
@@ -204,7 +204,7 @@ export default function OnboardingPage(): ReactNode {
             </a>
           </p>
           <p className={styles.roadmap}>
-            <strong>[ROADMAP]</strong> {ROADMAP_NOTE}
+            <strong>Roadmap.</strong> {ROADMAP_NOTE}
           </p>
         </section>
       </article>

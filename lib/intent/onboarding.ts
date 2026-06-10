@@ -145,7 +145,7 @@ export const LEADERBOARD_PATH = '/arena';
  * agrees with the published schema.
  */
 export const ROADMAP_NOTE =
-  'Live ingestion of arbitrary external agents onto the leaderboard is [ROADMAP]. In [CORE], the leaderboard is driven by seed agents and the only CI-guaranteed conformance is that the example Intent passes P0.3 validation and matches the published schema.';
+  'Live ingestion of arbitrary external agents onto the leaderboard is on the roadmap. In the current deployment, the leaderboard is driven by seed agents and the only CI-guaranteed conformance is that the example Intent passes P0.3 validation and matches the published schema.';
 
 /** The whitelisted markets an external Intent may target (single-sourced from CONFIG). */
 export const WHITELISTED_MARKETS: readonly string[] = CONFIG.policy.market_whitelist;
