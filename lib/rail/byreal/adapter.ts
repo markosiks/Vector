@@ -7,6 +7,12 @@ import { createMemoryIdempotencyStore, type IdempotencyStore } from './idempoten
 import { buildOutcome, findPosition, parseOrderResult } from './parse';
 import { runByrealCli, type ByrealCliResult } from './cli';
 
+/** Sanitize untrusted CLI error text (B-03): cap length + strip control chars. */
+function sanitizeCliError(msg: unknown): string {
+  if (typeof msg !== 'string') return 'byreal order failed';
+  return msg.slice(0, 256).replace(/[\x00-\x1f]/g, '');
+}
+
 /**
  * The Byreal Perps CLI execution rail (P2.1).
  *
@@ -84,6 +90,14 @@ export function createByrealRail(deps: ByrealRailDeps): Rail {
     ...(deps.cliPath === undefined ? {} : { cliPath: deps.cliPath }),
   };
 
+  /**
+   * Promise-memo for in-flight executions (B-01): maps intentHash → the
+   * in-progress promise. Stored before the CLI call so concurrent callers
+   * with the same hash await the same promise rather than each firing a new
+   * order (eliminates the TOCTOU window between store.get and store.set).
+   */
+  const inFlight = new Map<string, Promise<RailFill | null>>();
+
   /** Best-effort position read; never throws (a miss leaves the outcome zeroed). */
   async function readOpenPosition(coin: string): Promise<ReturnType<typeof findPosition>> {
     try {
@@ -97,49 +111,64 @@ export function createByrealRail(deps: ByrealRailDeps): Rail {
   }
 
   return {
-    async execute(request: RailRequest): Promise<RailFill | null> {
+    execute(request: RailRequest): Promise<RailFill | null> {
       const { intent, intentHash } = request;
 
       // Not expressible on the Byreal rail (transfer, unmapped market, limit,
       // no-op modify) ⇒ defer to the deterministic seed fallback.
       const command = buildSettlementCommand(intent);
-      if (command === null) return null;
+      if (command === null) return Promise.resolve(null);
 
-      // Idempotency: a repeat of the same canonical Intent reuses the first fill,
-      // so a retry/re-run never places a second order.
-      if (intentHash !== undefined) {
+      // Idempotency with promise-memo (B-01 / B-04): check the durable store
+      // first (for fills that survived a process restart), then the in-flight
+      // map.  If a promise is already in-flight for this hash, return it
+      // directly so concurrent callers await the same promise — this closes the
+      // TOCTOU window that existed between the old store.get and store.set.
+      const executeInner = async (): Promise<RailFill | null> => {
         const cached = await store.get(intentHash);
         if (cached !== undefined) return cached;
-      }
 
-      const res = await runCli(command.argv, runOptions);
-      const envelope = parseEnvelope(res.stdout);
-      if (!envelope.success) {
-        throw new ByrealRailError(
-          envelope.error?.message ?? 'byreal order failed',
-          envelope.error?.code,
-        );
-      }
+        const res = await runCli(command.argv, runOptions);
+        const envelope = parseEnvelope(res.stdout);
+        if (!envelope.success) {
+          // B-03: sanitize untrusted CLI error text before surfacing it.
+          throw new ByrealRailError(
+            sanitizeCliError(envelope.error?.message),
+            envelope.error?.code,
+          );
+        }
 
-      const order = parseOrderResult(envelope.data);
-      const position = readPosition ? await readOpenPosition(command.market.coin) : undefined;
+        const order = parseOrderResult(envelope.data);
+        const position = readPosition ? await readOpenPosition(command.market.coin) : undefined;
 
-      const outcome = buildOutcome({
-        order,
-        position,
-        isClose: intent.action === 'close',
-        ...(intent.action === 'open' ? { openSide: intent.side } : {}),
-      });
+        const outcome = buildOutcome({
+          order,
+          position,
+          isClose: intent.action === 'close',
+          ...(intent.action === 'open' ? { openSide: intent.side } : {}),
+        });
 
-      const fill: RailFill = {
-        status: order.status,
-        outcome,
-        rail_order_id: order.orderId,
-        response: envelope,
+        const fill: RailFill = {
+          status: order.status,
+          outcome,
+          rail_order_id: order.orderId,
+          response: envelope,
+        };
+
+        await store.set(intentHash, fill);
+        return fill;
       };
 
-      if (intentHash !== undefined) await store.set(intentHash, fill);
-      return fill;
+      // B-01: store the in-progress promise before awaiting so any concurrent
+      // caller with the same hash gets the same promise, not a second order.
+      const existing = inFlight.get(intentHash);
+      if (existing !== undefined) return existing;
+
+      const promise = executeInner().finally(() => {
+        inFlight.delete(intentHash);
+      });
+      inFlight.set(intentHash, promise);
+      return promise;
     },
   };
 }
