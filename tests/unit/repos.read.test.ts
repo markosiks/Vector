@@ -63,7 +63,8 @@ describe('listPolicyEventsPage', () => {
     await listPolicyEventsPage(db, 50);
     expect(db.last?.sql).toContain('ORDER BY created_at DESC, id DESC');
     expect(db.last?.sql).not.toContain('WHERE');
-    expect(db.last?.params).toEqual([50]);
+    // F-06: repo fetches limit+1 so the API layer can detect a further page.
+    expect(db.last?.params).toEqual([51]);
   });
 
   test('keyset page: seek predicate with casts, binds (t, id, limit)', async () => {
@@ -73,7 +74,7 @@ describe('listPolicyEventsPage', () => {
     expect(sql).toContain('WHERE (created_at < $1::timestamptz');
     expect(sql).toContain('id < $2::uuid');
     expect(sql).toContain('LIMIT $3');
-    expect(db.last?.params).toEqual([TS, ID, 50]);
+    expect(db.last?.params).toEqual([TS, ID, 51]); // F-06: limit+1 fetch
   });
 
   test('selects a microsecond-precision cursor_t key (avoids ms-truncation row loss)', async () => {
@@ -102,14 +103,14 @@ describe('listAttestationsPage', () => {
     const db = new SpyDb();
     await listAttestationsPage(db, { limit: 30 });
     expect(db.last?.sql).not.toContain('WHERE');
-    expect(db.last?.params).toEqual([30]);
+    expect(db.last?.params).toEqual([31]); // F-06: limit+1 fetch
   });
 
   test('chain_state filter binds first', async () => {
     const db = new SpyDb();
     await listAttestationsPage(db, { limit: 30, chainState: 'optimistic' });
     expect(db.last?.sql).toContain('WHERE chain_state = $1');
-    expect(db.last?.params).toEqual(['optimistic', 30]);
+    expect(db.last?.params).toEqual(['optimistic', 31]); // F-06: limit+1 fetch
   });
 
   test('filter + cursor compose with correct placeholder order', async () => {
@@ -124,7 +125,7 @@ describe('listAttestationsPage', () => {
     expect(sql).toContain('created_at < $2::timestamptz');
     expect(sql).toContain('id < $3::uuid');
     expect(sql).toContain('LIMIT $4');
-    expect(db.last?.params).toEqual(['confirmed', TS, ID, 30]);
+    expect(db.last?.params).toEqual(['confirmed', TS, ID, 31]); // F-06: limit+1 fetch
   });
 });
 

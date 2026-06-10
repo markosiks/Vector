@@ -54,12 +54,14 @@ function randomIntent(r: () => number): Intent {
     signature: DUMMY_SIG,
   };
   if (action === 'transfer') {
-    const withTarget = r() < 0.8;
+    // target_address is required on transfer intents at the schema boundary
+    // (I-04); ADDRS mixes whitelisted and non-whitelisted destinations so the
+    // referee's transfer-block path is still exercised.
     return signedIntentSchema.parse({
       action,
       ...base,
       size: amount(r),
-      ...(withTarget ? { target_address: pick(r, ADDRS) } : {}),
+      target_address: pick(r, ADDRS),
     });
   }
   if (action === 'close') {

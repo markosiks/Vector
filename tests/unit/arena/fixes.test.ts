@@ -77,7 +77,7 @@ describe('CSS module fallback (F5)', () => {
   test('non-null assertion on undefined would yield "undefined" — ?? avoids this', () => {
     // Illustrate why ! is risky: casting undefined to string yields "undefined".
     const cls: string | undefined = undefined;
-    const withBang = cls as string; // TypeScript treats this as `string` but it's undefined at runtime
+    const withBang = cls as unknown as string; // TypeScript treats this as `string` but it's undefined at runtime
     // The value is still undefined at runtime — joining it into a className would
     // produce " undefined" which the fallback prevents.
     expect(String(withBang)).toBe('undefined');
