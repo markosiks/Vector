@@ -3,10 +3,14 @@
 **The merit layer for autonomous capital on Mantle.**
 
 A bounded-execution **referee** (firewall) + reputation **scoring** (AgentScore
-0–100) + a reputation-weighted **capital router**, anchored on-chain by an
-ERC-8004 Reputation Registry on Mantle testnet. Demo rail: Byreal Perps CLI.
-The product is a deterministic 90-second arc: merit → blocked theft →
-reputation collapse → capital reroute.
+0–100) + a reputation-weighted **capital router**, anchored on-chain by the
+canonical ERC-8004 registries on Mantle testnet — Identity
+(`0x8004A818BFB912233c491871b3d84c89A494BD9e`) and Reputation
+(`0x8004B663056A597Dffe9eCcC1965A193B7388713`, via `giveFeedback`). A custom
+auxiliary `VectorMeritRegistry` contract provides a lightweight merit/eligibility
+cache (not ERC-8004). Demo rail: Byreal Perps CLI. The product is a
+deterministic 90-second arc: merit → blocked theft → reputation collapse →
+capital reroute.
 
 > **Stage P0.1 — App Skeleton & Seeded Config.** Foundation only: app skeleton,
 > DB client, env/secrets, SWR data layer, and the single immutable seeded config
