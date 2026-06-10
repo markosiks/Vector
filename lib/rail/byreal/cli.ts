@@ -58,7 +58,12 @@ export interface RunByrealCliOptions {
   readonly maxOutputBytes?: number;
 }
 
-const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+/**
+ * B-05: align the process-kill threshold with envelope.ts's parse-rejection
+ * threshold so no stdout range is rejected by the parser yet not killed by the
+ * process cap. Both modules use 1 MiB.
+ */
+const DEFAULT_MAX_OUTPUT_BYTES = 1_024 * 1_024;
 
 /** Resolve the CLI entry script from an explicit path or the installed package. */
 export function resolveCliPath(explicit?: string): string {
@@ -121,6 +126,11 @@ export function runByrealCli(
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(process.execPath, argv, {
+        // B-07: Record<string,string> is a subtype of NodeJS.ProcessEnv;
+        // the cast is retained because exactOptionalPropertyTypes:true and the
+        // bun-types ProcessEnv augmentation (Bun.Env) make structural assignment
+        // require an explicit narrowing. The cast is safe: the child only ever
+        // receives the five intentional keys built by buildChildEnv.
         env: buildChildEnv(options.credentials) as NodeJS.ProcessEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -163,8 +173,12 @@ export function runByrealCli(
       }
     });
     child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8');
-      if (stderr.length > maxBytes) stderr = stderr.slice(0, maxBytes);
+      // B-08: slice before appending to avoid peak allocation reaching maxBytes
+      // before the post-hoc trim (a single large chunk would otherwise spike
+      // to chunk.length before being cut back to maxBytes).
+      if (stderr.length < maxBytes) {
+        stderr += chunk.toString('utf8').slice(0, maxBytes - stderr.length);
+      }
     });
 
     child.on('error', (err) => {

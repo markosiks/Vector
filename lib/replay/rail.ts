@@ -34,12 +34,13 @@ export interface RailRequest {
   /** Global tick ordinal (the seed rail keys its fill on this). */
   readonly tickIndex: number;
   /**
-   * Canonical `intent_hash` of the Intent being settled, when known. The seed
-   * rail ignores it; a live rail (P2.1) uses it as the idempotency key so a
-   * retry never places a second order. Optional so existing callers and the
-   * deterministic seed path are unaffected.
+   * Canonical `intent_hash` of the Intent being settled. Required so every
+   * call-site enforces idempotency: the live rail (P2.1) uses it as the
+   * idempotency key so a retry never places a second order. The seed rail
+   * ignores the value but the field is still required to ensure callers always
+   * supply a hash (B-04 / B-01).
    */
-  readonly intentHash?: string;
+  readonly intentHash: string;
 }
 
 /** An execution rail: settles an allowed Intent, or returns `null` to defer to fallback. */

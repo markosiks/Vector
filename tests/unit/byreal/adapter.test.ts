@@ -64,12 +64,12 @@ function mockRunner(
   return { run, calls };
 }
 
-function req(intent: Intent, intentHash?: string): RailRequest {
+function req(intent: Intent, intentHash = 'default-hash'): RailRequest {
   return {
     intent,
     agentId: 'a',
     tickIndex: 0,
-    ...(intentHash === undefined ? {} : { intentHash }),
+    intentHash,
   };
 }
 
@@ -201,5 +201,99 @@ describe('execute — idempotency by intent_hash', () => {
     await rail.execute(req(OPEN, 'hash-1'));
     await rail.execute(req(OPEN, 'hash-2'));
     expect(m.calls.filter((c) => c[0] === 'order')).toHaveLength(2);
+  });
+
+  // B-01 regression: concurrent calls with the same intentHash must not place
+  // two orders. The promise-memo stores the in-progress promise before the CLI
+  // call resolves, so the second caller awaits the same promise.
+  test('concurrent execute() calls with the same hash fire only one order', async () => {
+    let orderCallCount = 0;
+    // A CLI runner that resolves asynchronously (via a microtask) so both
+    // concurrent callers can enter execute() before the first one resolves.
+    const run: ByrealCliRunner = async (subArgv) => {
+      const kind = subArgv[0] === 'position' && subArgv[1] === 'list' ? 'position' : 'order';
+      if (kind === 'order') orderCallCount += 1;
+      await Promise.resolve(); // yield to allow the second call to enter
+      if (kind === 'position') {
+        return { stdout: JSON.stringify({ success: true, data: [] }), stderr: '', code: 0 };
+      }
+      return {
+        stdout: JSON.stringify({
+          success: true,
+          data: { filled: { oid: 1, totalSz: '0.01', avgPx: '65000' }, fee: '0' },
+        }),
+        stderr: '',
+        code: 0,
+      };
+    };
+
+    const rail = createByrealRail({
+      credentials: CREDS,
+      runCli: run,
+      idempotency: createMemoryIdempotencyStore(),
+    });
+
+    // Fire both calls concurrently with the same hash — neither awaits.
+    const [fillA, fillB] = await Promise.all([
+      rail.execute(req(OPEN, 'race-hash')),
+      rail.execute(req(OPEN, 'race-hash')),
+    ]);
+
+    // Both callers must receive the same fill object.
+    expect(fillA).toEqual(fillB);
+    // Only ONE order call must have been made.
+    expect(orderCallCount).toBe(1);
+  });
+});
+
+describe('execute — B-03 error message sanitization', () => {
+  test('control characters are stripped from CLI error messages', async () => {
+    const m = mockRunner({
+      order: {
+        stdout: JSON.stringify({
+          success: false,
+          error: { code: 'BAD', message: 'error\x00with\x1fnull\nbytes' },
+        }),
+        stderr: '',
+        code: 1,
+      },
+    });
+    const rail = createByrealRail({ credentials: CREDS, runCli: m.run });
+    const err = await rail.execute(req(OPEN, 'h')).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ByrealRailError);
+    expect((err as ByrealRailError).message).toBe('errorwithnullbytes');
+  });
+
+  test('CLI error messages are capped at 256 characters', async () => {
+    const longMsg = 'x'.repeat(400);
+    const m = mockRunner({
+      order: {
+        stdout: JSON.stringify({
+          success: false,
+          error: { code: 'LONG', message: longMsg },
+        }),
+        stderr: '',
+        code: 1,
+      },
+    });
+    const rail = createByrealRail({ credentials: CREDS, runCli: m.run });
+    const err = await rail.execute(req(OPEN, 'h')).catch((e: unknown) => e);
+    expect((err as ByrealRailError).message.length).toBeLessThanOrEqual(256);
+  });
+
+  test('a missing error.message falls back to the default message', async () => {
+    // success:false with no error field at all → envelope.error is undefined
+    // → sanitizeCliError(undefined) → 'byreal order failed'
+    const m = mockRunner({
+      order: {
+        stdout: JSON.stringify({ success: false }),
+        stderr: '',
+        code: 1,
+      },
+    });
+    const rail = createByrealRail({ credentials: CREDS, runCli: m.run });
+    const err = await rail.execute(req(OPEN, 'h')).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ByrealRailError);
+    expect((err as ByrealRailError).message).toBe('byreal order failed');
   });
 });

@@ -60,7 +60,7 @@ describe('parseEnvelope', () => {
   });
 
   test('throws on output past the size bound', () => {
-    expect(() => parseEnvelope(`{"success":true,"x":"${'a'.repeat(1_000_001)}"}`)).toThrow(
+    expect(() => parseEnvelope(`{"success":true,"x":"${'a'.repeat(1_048_577)}"}`)).toThrow(
       ByrealParseError,
     );
   });
@@ -200,5 +200,46 @@ describe('buildOutcome', () => {
       capital_at_risk: '0',
       drawdown: '0',
     });
+  });
+});
+
+// B-02 regression: scientific-notation totalSz must not silently downgrade a
+// real fill to status 'sent'. The string "1e-8" previously fell through the
+// decimal regex → decOr0 returned '0' → filledSize = '0' → status = 'sent'.
+describe('parseOrderResult — B-02 scientific-notation totalSz', () => {
+  test('"1e-8" string totalSz is correctly parsed as a filled order', () => {
+    const r = parseOrderResult({ filled: { oid: 99, totalSz: '1e-8', avgPx: '65000' } });
+    expect(r.status).toBe('filled');
+    expect(r.filledSize).toBe('0.00000001');
+  });
+
+  test('"1E-8" (upper-case E) is accepted', () => {
+    const r = parseOrderResult({ filled: { oid: 1, totalSz: '1E-8', avgPx: '100' } });
+    expect(r.status).toBe('filled');
+    expect(r.filledSize).toBe('0.00000001');
+  });
+
+  test('"5e2" (positive exponent) is accepted and canonical', () => {
+    const r = parseOrderResult({ filled: { oid: 1, totalSz: '5e2', avgPx: '1' } });
+    expect(r.status).toBe('filled');
+    expect(r.filledSize).toBe('500');
+  });
+});
+
+// B-06 regression: trailing-zero strings must be stored in canonical form.
+describe('parseOrderResult — B-06 trailing zeros are stripped', () => {
+  test('"0.10" is canonicalized to "0.1"', () => {
+    const r = parseOrderResult({ filled: { oid: 1, totalSz: '0.10', avgPx: '100' } });
+    expect(r.filledSize).toBe('0.1');
+  });
+
+  test('"1.500" is canonicalized to "1.5"', () => {
+    const r = parseOrderResult({ oid: 1, closedPnl: '1.500' });
+    expect(r.realizedPnl).toBe('1.5');
+  });
+
+  test('"10.00" is canonicalized to "10"', () => {
+    const r = parseOrderResult({ oid: 1, fee: '10.00' });
+    expect(r.fees).toBe('10');
   });
 });
