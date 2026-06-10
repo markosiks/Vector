@@ -83,6 +83,14 @@ export async function agentExists(reader: IdentityReader, agentId: bigint): Prom
 }
 
 /**
+ * Process-scoped cache for `ownerOf` results. Agent ownership is static once
+ * registered (the token never changes owner in the demo arc), so caching the
+ * `ownerOf` round-trip eliminates one RPC call per `submitAttestation` (A-05).
+ * The `isAuthorizedOrOwner` call remains live for correctness.
+ */
+const ownerOfCache = new Map<bigint, Address>();
+
+/**
  * Assert that `attestor` may leave feedback for `agentId` against the canonical
  * registry, failing closed before any write:
  * - the agent must be registered (else `giveFeedback` reverts on a missing token);
@@ -91,6 +99,8 @@ export async function agentExists(reader: IdentityReader, agentId: bigint): Prom
  *
  * This is the deterministic guard for the two-key model: the owner key
  * registers agents, a *separate* attestor key writes feedback.
+ *
+ * `ownerOf` results are cached process-wide (A-05) since ownership is static.
  */
 export async function assertCanAttest(
   reader: IdentityReader,
@@ -98,15 +108,29 @@ export async function assertCanAttest(
   agentId: bigint,
 ): Promise<void> {
   const id = toAgentId(agentId);
-  const owner = await reader.ownerOf(id);
-  if (owner === null) {
-    throw new IdentityError('agent is not registered in the Identity Registry');
+  let owner = ownerOfCache.get(id);
+  if (owner === undefined) {
+    const fetched = await reader.ownerOf(id);
+    if (fetched === null) {
+      throw new IdentityError('agent is not registered in the Identity Registry');
+    }
+    ownerOfCache.set(id, fetched);
+    owner = fetched;
   }
   if (await reader.isAuthorizedOrOwner(attestor, id)) {
     throw new IdentityError(
       'attestor is the agent owner/operator — the registry rejects self-feedback; use a separate attestor key',
     );
   }
+}
+
+/**
+ * Clear the `ownerOf` process cache. **Test-only**: because the cache is a
+ * process singleton, tests that supply a fake reader must clear it between runs
+ * to avoid stale hits. Not for production use.
+ */
+export function resetOwnerOfCacheForTest(): void {
+  ownerOfCache.clear();
 }
 
 /** Validate an agent card URI argument for {@link registerAgent}. */
