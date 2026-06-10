@@ -142,6 +142,31 @@ describe('seeded config — runtime immutability', () => {
   });
 });
 
+describe('seeded config — capital schema (R-01 regression)', () => {
+  test('a fractional pool_size is rejected (must be a positive integer)', () => {
+    // R-01: pool_size was validated as positive (float); a fractional value like
+    // 1_000_000.3 would pass and be encoded via toFixed(18), exposing an IEEE 754
+    // expansion instead of the intended decimal. The fix: positiveInt.
+    const candidate = {
+      ...CONFIG,
+      capital: { ...CONFIG.capital, pool_size: 1_000_000.3 },
+    };
+    const result = configSchema.safeParse(candidate);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.join('.') === 'capital.pool_size')).toBe(true);
+    }
+  });
+
+  test('an integer pool_size is accepted', () => {
+    const candidate = {
+      ...CONFIG,
+      capital: { ...CONFIG.capital, pool_size: 2_000_000 },
+    };
+    expect(configSchema.safeParse(candidate).success).toBe(true);
+  });
+});
+
 describe('seeded config — single instance', () => {
   test('re-importing yields the same frozen reference', async () => {
     const a = (await import('@/lib/config/constants')).CONFIG;
