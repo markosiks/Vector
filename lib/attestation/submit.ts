@@ -87,8 +87,17 @@ export interface SubmitResult {
 const HEX32_RE = /^0x[0-9a-fA-F]{64}$/;
 const INTEGER_RE = /^-?[0-9]+$/;
 
-/** Construct the absolute off-chain detail URI for an attestation. */
-export function buildFeedbackUri(baseUrl: string, attestationId: string): string {
+/**
+ * Construct the absolute off-chain detail URI for an attestation.
+ *
+ * `nodeEnv` defaults to `process.env.NODE_ENV` and is an injectable seam for
+ * testing (A-04): avoids mutating the read-only `process.env.NODE_ENV`.
+ */
+export function buildFeedbackUri(
+  baseUrl: string,
+  attestationId: string,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): string {
   let url: URL;
   try {
     url = new URL(baseUrl);
@@ -97,6 +106,13 @@ export function buildFeedbackUri(baseUrl: string, attestationId: string): string
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new AttestationSubmitError('baseUrl must be an http(s) URL');
+  }
+  if (url.protocol === 'http:' && nodeEnv !== 'development') {
+    // An http:// feedbackURI written on-chain is permanently insecure; enforce
+    // https:// in all non-development environments (A-04).
+    throw new AttestationSubmitError(
+      'baseUrl must use https:// in non-development environments',
+    );
   }
   const base = baseUrl.replace(/\/+$/, '');
   return `${base}/api/attestations/${encodeURIComponent(attestationId)}/feedback`;
@@ -176,9 +192,11 @@ export async function submitAttestation(
   });
   if (claimed === null) {
     // Lost the `tx_hash IS NULL` race to a concurrent submit. The other call's
-    // transaction is the recorded one; surface this so the caller can see the
-    // (in-process coalescing should prevent it) duplicate send.
-    return { status: 'raced', attestation: row, txHash };
+    // transaction is the recorded one; re-read so the caller sees the winner's
+    // tx_hash instead of the stale pre-update snapshot.
+    // (In-process coalescing prevents this path in normal operation.)
+    const current = await getAttestationById(deps.db, row.id);
+    return { status: 'raced', attestation: current ?? row, txHash };
   }
   return { status: 'submitted', attestation: claimed, txHash };
 }
