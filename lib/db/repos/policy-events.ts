@@ -97,7 +97,9 @@ export function listPolicyEventsPage(
 ): Promise<PolicyEventPageRow[]> {
   const params: unknown[] = [];
   const where = before === undefined ? '' : `WHERE ${keysetBefore(before, params)} `;
-  params.push(limit);
+  // Fetch limit+1 so paginate() can detect a further page without an extra
+  // empty round-trip when the total row count is an exact multiple of limit.
+  params.push(limit + 1);
   return selectMany(
     db,
     `SELECT *, ${CURSOR_KEY_SQL} FROM policy_events ${where}ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,

@@ -211,7 +211,9 @@ export function listAttestationsPage(
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')} ` : '';
-  values.push(params.limit);
+  // Fetch limit+1 so paginate() can detect a further page without an extra
+  // empty round-trip when the total row count is an exact multiple of limit.
+  values.push(params.limit + 1);
   return selectMany(
     db,
     `SELECT *, ${CURSOR_KEY_SQL} FROM attestations ${where}ORDER BY created_at DESC, id DESC LIMIT $${values.length}`,
