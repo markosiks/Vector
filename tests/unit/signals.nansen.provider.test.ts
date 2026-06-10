@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { NansenClient } from '@/lib/signals/nansen/client';
+import { NansenRateLimitError, type NansenClient } from '@/lib/signals/nansen/client';
 import { createNansenSignalProvider } from '@/lib/signals/nansen/provider';
 import type { NansenCallEvent, NansenSignal } from '@/lib/signals/nansen/types';
 
@@ -203,6 +203,68 @@ describe('nansen provider — concurrency & resilience', () => {
       );
     }
     expect(JSON.stringify(events)).not.toContain('netflowUsd');
+  });
+});
+
+describe('nansen provider — rate-limit backoff (E-1: retryAfterMs wired into cadence gate)', () => {
+  test('a 429 with Retry-After blocks the cadence gate until the backoff elapses', async () => {
+    // Arrange: controllable clock so we can fast-forward time deterministically.
+    let nowMs = 1_000;
+    let callCount = 0;
+    const client: NansenClient = {
+      fetchSignal: () => {
+        callCount += 1;
+        return Promise.reject(new NansenRateLimitError(30_000)); // 30 s backoff
+      },
+    };
+    const p = createNansenSignalProvider({
+      client,
+      pollEveryNTicks: 1, // cadence always due (tick-based gate open)
+      cacheTtlMs: 0, // always stale
+      now: () => nowMs,
+    });
+
+    // First tick fires the fetch → 429 → rateLimitUntilMs = 1_000 + 30_000 = 31_000.
+    p.maybeRefresh(0);
+    await flush();
+    expect(callCount).toBe(1);
+
+    nowMs = 30_999; // one ms before the backoff expires → still blocked
+    p.maybeRefresh(1);
+    expect(callCount).toBe(1); // gate closed: no new call
+
+    nowMs = 31_000; // backoff elapsed → gate re-opens
+    p.maybeRefresh(2);
+    await flush();
+    expect(callCount).toBe(2); // new fetch allowed
+
+    // No snapshot was ever stored (all fetches rejected), fail-open → undefined.
+    expect(p.current()).toBeUndefined();
+  });
+
+  test('a 429 without Retry-After does not set a backoff (gate stays tick-driven)', async () => {
+    const nowMs = 0;
+    let callCount = 0;
+    const client: NansenClient = {
+      fetchSignal: () => {
+        callCount += 1;
+        return Promise.reject(new NansenRateLimitError(undefined)); // no Retry-After
+      },
+    };
+    const p = createNansenSignalProvider({
+      client,
+      pollEveryNTicks: 1,
+      cacheTtlMs: 0,
+      now: () => nowMs,
+    });
+    p.maybeRefresh(0);
+    await flush();
+    expect(callCount).toBe(1);
+
+    // With no Retry-After, the next cadence-due tick should fire another fetch.
+    p.maybeRefresh(1);
+    await flush();
+    expect(callCount).toBe(2); // gate was not blocked
   });
 });
 
