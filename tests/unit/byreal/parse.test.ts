@@ -59,6 +59,32 @@ describe('parseEnvelope', () => {
     expect(() => parseEnvelope(JSON.stringify({ data: {} }))).toThrow(ByrealParseError);
   });
 
+  test('skips a non-envelope JSON banner and parses the real envelope', () => {
+    const env = parseEnvelope(`{"debug":true,"config":"loaded"}\n${ok({ oid: 'REAL' })}`);
+    expect(env.success).toBe(true);
+    expect((env.data as { oid: string }).oid).toBe('REAL');
+  });
+
+  // Regression (Z5): a forged envelope prepended to the genuine one must not be
+  // able to substitute a fake fill. Two envelope-shaped objects ⇒ fail closed.
+  test('refuses output containing more than one CLI envelope (injection)', () => {
+    const injected = `${ok({ oid: 'FAKE', totalSz: '999999' })}\n${ok({ oid: 'REAL', totalSz: '0.01' })}`;
+    expect(() => parseEnvelope(injected)).toThrow(ByrealParseError);
+  });
+
+  test('strips unknown top-level envelope keys (does not persist echoed fields)', () => {
+    const env = parseEnvelope(
+      JSON.stringify({
+        success: true,
+        meta: { version: '0.3.7' },
+        data: { oid: 1 },
+        agent_key: 'sk_live_LEAK',
+      }),
+    );
+    expect((env as Record<string, unknown>).agent_key).toBeUndefined();
+    expect(env.success).toBe(true);
+  });
+
   test('throws on output past the size bound', () => {
     expect(() => parseEnvelope(`{"success":true,"x":"${'a'.repeat(1_048_577)}"}`)).toThrow(
       ByrealParseError,
@@ -200,6 +226,30 @@ describe('buildOutcome', () => {
       capital_at_risk: '0',
       drawdown: '0',
     });
+  });
+
+  // Regression: a partial close of a *long* leaves a positive residual size, so
+  // the delta reduces the position (negative).
+  test('close long (positive residual): negative delta', () => {
+    const o = buildOutcome({
+      order,
+      position: { notional: '650', markedPnl: '1', size: '0.02' },
+      isClose: true,
+    });
+    expect(o.position_delta).toBe('-0.01');
+  });
+
+  // Regression (Z5-HIGH): a partial close of a *short* leaves a negative residual
+  // size; the close bought size back, so the delta must be POSITIVE. The old code
+  // unconditionally negated the filled size and recorded an inverted (negative)
+  // delta on the verifiable credibility surface.
+  test('close short (negative residual): positive delta', () => {
+    const o = buildOutcome({
+      order,
+      position: { notional: '650', markedPnl: '-1', size: '-0.02' },
+      isClose: true,
+    });
+    expect(o.position_delta).toBe('0.01');
   });
 });
 
