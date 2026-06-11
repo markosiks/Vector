@@ -229,15 +229,28 @@ export interface OutcomeParts {
  *   is unknown from the order result alone, so `'0'` (documented; credibility).
  * - `pnl_marked` — the position's unrealized PnL (read), else `'0'`.
  * - `pnl_realized` — booked by the order (closes only).
- * - `position_delta` — signed filled size: an open takes the intent's side; a
- *   close reduces the position (negative of the filled size).
+ * - `position_delta` — signed filled size that moves the position toward zero
+ *   on a close and away on an open. A `close` Intent carries no `side`
+ *   (`closeShape`), so the close sign is derived from the *resulting* position
+ *   read: closing a short (a still-negative residual size, or a buy-back) is a
+ *   positive delta, closing a long is negative. When the close flattens the
+ *   position the venue reports no residual (`position` is `undefined`); the side
+ *   is then unknowable from the order result alone, so we keep the historical
+ *   long-assumption (negative). This only affects the verifiable credibility
+ *   surface — Byreal outcomes never feed the deterministic score.
  * - `drawdown` — not derivable per-fill from the venue; `'0'` by contract (it is
  *   a scoring-only quantity and Byreal outcomes never feed the score).
  */
 export function buildOutcome(parts: OutcomeParts): SeedOutcome {
   const { order, position, openSide, isClose } = parts;
+  // A residual short position (negative size) means the close bought back size,
+  // so the delta is positive; otherwise (long residual, or flat → unknown) the
+  // close reduces a long and the delta is negative.
+  const closeIsShort = position !== undefined && position.size.startsWith('-');
   const positionDelta = isClose
-    ? negateDecimal(order.filledSize)
+    ? closeIsShort
+      ? absDecimal(order.filledSize)
+      : negateDecimal(order.filledSize)
     : openSide === 'short'
       ? negateDecimal(order.filledSize)
       : order.filledSize;
