@@ -40,7 +40,14 @@ if (typeof DATABASE_URL !== 'string' || DATABASE_URL.length === 0) {
 }
 
 const SWEEP_LIMIT = Number(process.env.SWEEP_LIMIT ?? 100);
-const BASE_URL = process.env.PUBLIC_BASE_URL ?? 'https://localhost';
+
+// Fail closed: the feedbackURI derived from this value is written immutably
+// on-chain, so a fallback (e.g. `https://localhost`) would permanently anchor
+// unreachable URIs.
+const BASE_URL = process.env.PUBLIC_BASE_URL;
+if (typeof BASE_URL !== 'string' || BASE_URL.length === 0) {
+  throw new Error('PUBLIC_BASE_URL is required');
+}
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const db = toQueryable(await pool.connect());
@@ -94,7 +101,11 @@ for (const row of stuck) {
     console.log(`[sweep] ${row.id}: submit=${result.submit.status} reconcile=${result.reconcile?.status ?? 'n/a'}`);
     ok += 1;
   } catch (err) {
-    console.error(`[sweep] ${row.id}: error`, err);
+    // Log name/message only: full error objects (viem/pg) can carry RPC URLs
+    // or connection strings in their cause chain, which must not reach
+    // CI/cron log archives.
+    const e = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error(`[sweep] ${row.id}: error ${e}`);
     failed += 1;
   }
 }
