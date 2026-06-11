@@ -23,6 +23,11 @@ lands in; the pool itself is tracked at 18 decimals and conserved exactly,
 while the leaderboard truncates amounts to whole tMNT for display
 (`lib/arena/format.ts`), so mid-arc rows can visually sum to one unit less.
 
+> The video captures an earlier recorded run (post-crash score 7.0). The
+> deployed arena always shows the most recent run, so on-screen values may
+> differ — every round in the Attestation Log links to its Mantle Sepolia tx,
+> so any run, recorded or live, is independently verifiable on-chain.
+
 **[📑 Pitch deck (PDF, 7 slides)](./docs/pitch/vector-pitch-deck.pdf)** —
 problem, architecture, the demo arc, on-chain proof, and roadmap.
 
