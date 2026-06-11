@@ -302,97 +302,123 @@ async function processAgentTick(
   const validated = await validateIntent(signed, tickValidate);
   if (!validated.ok) return; // Structurally invalid: nothing to persist or settle.
 
-  // Reserve the nonce + persist the Intent before the referee runs. The referee
-  // re-validates (defense in depth) but is NOT given an `isNonceUsed` probe: the
-  // nonce is now reserved in the DB, so probing it would falsely reject this very
-  // Intent as a replay. Durable anti-replay is the reservation, not the probe.
-  const intentRow = await insertIntentReserving(
-    db,
-    intentToColumns(validated.intent, {
-      roundId: round.id,
-      agentUuid,
-      hash: validated.intent_hash,
-    }),
-  );
-  if (intentRow === null) return; // Nonce already used (replay): skip silently.
-
-  const state: RefereeState = {
-    killSwitch: round.killSwitch,
-    agent: {
-      allocation,
-      remaining_budget: allocation,
-      drawdown: '0',
-      // An operator per-agent HALT cuts execution here too (rule #1b), mirroring
-      // the router's gate-out. Seed agents default to 'active', so the arc stays
-      // byte-identical unless an operator explicitly halts one.
-      halted: agentRow?.status === 'halted',
-    },
-  };
-  const decision = await runReferee({
-    db,
-    input: signed,
-    ids: { intent_id: intentRow.id, agent_id: agentUuid, round_id: round.id },
-    state,
-    validate: tickValidate,
-  });
-
-  // Only an ALLOW or CLIP reaches the rail; a REJECT/HALT already recorded its
-  // `policy_event` and produces no execution/outcome (the drain's path).
-  if (decision.decision !== 'ALLOW' && decision.decision !== 'CLIP') return;
-
-  const seedOutcome = arc.outcomes[agentId]?.[tick.index];
-  if (seedOutcome === undefined) return;
-  const executed = decision.modified_intent ?? validated.intent;
-  const { fill, degraded } = await settleWithFallback(
-    rail,
-    { intent: executed, agentId, tickIndex: tick.index, intentHash: validated.intent_hash },
-    {
-      status: 'filled',
-      outcome: seedOutcome,
-      rail_order_id: `seed-${agentId}-${tick.index}`,
-    },
-  );
-  // R-02: surface live-rail degradation so operator dashboards can detect
-  // prolonged outages instead of silently serving seed-frozen fills.
-  if (degraded) {
-    console.warn(
-      `[seed-rail] degraded to seed fill for agent=${agentId} tick=${tick.index}: live rail failed`,
+  // Atomicity (R-08): the nonce reservation and every row it gates — the policy
+  // events, the execution, the outcome — commit as one unit on the dedicated
+  // client (same pattern as `settleRound`). Without this, a crash after
+  // `insertIntentReserving` but before `insertOutcome` burned the nonce with no
+  // settled rows; a re-run then skipped the tick silently (the anti-replay
+  // reservation reading its own torn write) and the fill was lost permanently.
+  // The credibility settlement stays *outside* the transaction: it is
+  // best-effort and swallows its own errors, but a swallowed DB error inside an
+  // open Postgres transaction would abort it and roll back the seed rows.
+  const settleTick = async (): Promise<CredibilitySettleArgs | undefined> => {
+    // Reserve the nonce + persist the Intent before the referee runs. The referee
+    // re-validates (defense in depth) but is NOT given an `isNonceUsed` probe: the
+    // nonce is now reserved in the DB, so probing it would falsely reject this very
+    // Intent as a replay. Durable anti-replay is the reservation, not the probe.
+    const intentRow = await insertIntentReserving(
+      db,
+      intentToColumns(validated.intent, {
+        roundId: round.id,
+        agentUuid,
+        hash: validated.intent_hash,
+      }),
     );
-  }
+    if (intentRow === null) return; // Nonce already used (replay): skip silently.
 
-  const execution = await insertExecution(db, {
-    intent_id: intentRow.id,
-    status: fill.status,
-    rail: 'seed',
-    rail_order_id: fill.rail_order_id ?? null,
-    request_json: executed,
-    response_json: fill.response ?? fill.outcome,
-  });
-  await insertOutcome(db, {
-    agent_id: agentUuid,
-    round_id: round.id,
-    execution_id: execution.id,
-    pnl_realized: fill.outcome.pnl_realized,
-    pnl_marked: fill.outcome.pnl_marked,
-    capital_at_risk: fill.outcome.capital_at_risk,
-    fees: fill.outcome.fees,
-    position_delta: fill.outcome.position_delta,
-    drawdown: fill.outcome.drawdown,
-  });
+    const state: RefereeState = {
+      killSwitch: round.killSwitch,
+      agent: {
+        allocation,
+        remaining_budget: allocation,
+        drawdown: '0',
+        // An operator per-agent HALT cuts execution here too (rule #1b), mirroring
+        // the router's gate-out. Seed agents default to 'active', so the arc stays
+        // byte-identical unless an operator explicitly halts one.
+        halted: agentRow?.status === 'halted',
+      },
+    };
+    const decision = await runReferee({
+      db,
+      input: signed,
+      ids: { intent_id: intentRow.id, agent_id: agentUuid, round_id: round.id },
+      state,
+      validate: tickValidate,
+    });
+
+    // Only an ALLOW or CLIP reaches the rail; a REJECT/HALT already recorded its
+    // `policy_event` and produces no execution/outcome (the drain's path).
+    if (decision.decision !== 'ALLOW' && decision.decision !== 'CLIP') return;
+
+    const seedOutcome = arc.outcomes[agentId]?.[tick.index];
+    if (seedOutcome === undefined) return;
+    const executed = decision.modified_intent ?? validated.intent;
+    const { fill, degraded } = await settleWithFallback(
+      rail,
+      { intent: executed, agentId, tickIndex: tick.index, intentHash: validated.intent_hash },
+      {
+        status: 'filled',
+        outcome: seedOutcome,
+        rail_order_id: `seed-${agentId}-${tick.index}`,
+      },
+    );
+    // R-02: surface live-rail degradation so operator dashboards can detect
+    // prolonged outages instead of silently serving seed-frozen fills.
+    if (degraded) {
+      console.warn(
+        `[seed-rail] degraded to seed fill for agent=${agentId} tick=${tick.index}: live rail failed`,
+      );
+    }
+
+    const execution = await insertExecution(db, {
+      intent_id: intentRow.id,
+      status: fill.status,
+      rail: 'seed',
+      rail_order_id: fill.rail_order_id ?? null,
+      request_json: executed,
+      response_json: fill.response ?? fill.outcome,
+    });
+    await insertOutcome(db, {
+      agent_id: agentUuid,
+      round_id: round.id,
+      execution_id: execution.id,
+      pnl_realized: fill.outcome.pnl_realized,
+      pnl_marked: fill.outcome.pnl_marked,
+      capital_at_risk: fill.outcome.capital_at_risk,
+      fees: fill.outcome.fees,
+      position_delta: fill.outcome.position_delta,
+      drawdown: fill.outcome.drawdown,
+    });
+
+    return {
+      intent: executed,
+      agentId,
+      tickIndex: tick.index,
+      intentHash: validated.intent_hash,
+      intentId: intentRow.id,
+      agentUuid,
+      roundId: round.id,
+    };
+  };
+
+  await db.query('BEGIN');
+  let credibility: CredibilitySettleArgs | undefined;
+  try {
+    credibility = await settleTick();
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw err;
+  }
 
   // Credibility settlement (P2.1): also settle the same allowed Intent on the
   // live Byreal rail, recording a separate `rail='byreal'` execution+outcome for
   // the verifiable surface. It is best-effort and *excluded from scoring*; a
-  // miss or error never affects the deterministic seed settlement above.
-  await settleCredibility(db, credibilityRail, {
-    intent: executed,
-    agentId,
-    tickIndex: tick.index,
-    intentHash: validated.intent_hash,
-    intentId: intentRow.id,
-    agentUuid,
-    roundId: round.id,
-  });
+  // miss or error never affects the deterministic seed settlement above (already
+  // committed at this point).
+  if (credibility !== undefined) {
+    await settleCredibility(db, credibilityRail, credibility);
+  }
 }
 
 /** Inputs to the credibility settlement: the executed Intent plus its row ids. */
