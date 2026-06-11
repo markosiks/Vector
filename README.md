@@ -16,8 +16,12 @@ The product is a deterministic ~90-second arc:
 
 **[▶ Watch the 2-minute demo video](./docs/demo/vector-demo.mp4)** — a real,
 unmocked run of the full pipeline: merit-driven allocation → injected
-fund-draining transfer → hard referee reject → reputation collapse (score 7,
-gated) → full pool rerouted to the runner-up, conserved to the last unit.
+fund-draining transfer → hard referee reject → reputation collapse (score ≤ 7,
+below the crash cap → gated) → full pool rerouted to the runner-up, conserved
+to the last unit. The exact post-crash score depends on the round the attack
+lands in; the pool itself is tracked at 18 decimals and conserved exactly,
+while the leaderboard truncates amounts to whole tMNT for display
+(`lib/arena/format.ts`), so mid-arc rows can visually sum to one unit less.
 
 **[📑 Pitch deck (PDF, 7 slides)](./docs/pitch/vector-pitch-deck.pdf)** —
 problem, architecture, the demo arc, on-chain proof, and roadmap.
@@ -40,7 +44,7 @@ problem, architecture, the demo arc, on-chain proof, and roadmap.
 | Explorer | `https://explorer.sepolia.mantle.xyz` |
 | **ERC-8004 Identity Registry** (canonical) | [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://explorer.sepolia.mantle.xyz/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) |
 | **ERC-8004 Reputation Registry** (canonical) | [`0x8004B663056A597Dffe9eCcC1965A193B7388713`](https://explorer.sepolia.mantle.xyz/address/0x8004B663056A597Dffe9eCcC1965A193B7388713) |
-| Registered agent (`agentId` / ERC-721 tokenId) | **136** |
+| Registered agent (`agentId` / ERC-721 tokenId) | **136** (milestone registration; each live arena run registers its own fresh agent ids) |
 | Live `giveFeedback` attestation tx | [`0x9910…74e9`](https://explorer.sepolia.mantle.xyz/tx/0x99101710c82bfc64fd37cb838c4c9426402cc91ebbdf6931b17aca36841874e9) (AgentScore 73.5, read back via `getSummary`) |
 | **VectorMeritRegistry** (auxiliary merit/eligibility cache, not ERC-8004) | [`0x1894Be93D9ACA27b7A6AF0eaD56354D9EbA0Ffb9`](https://explorer.sepolia.mantle.xyz/address/0x1894Be93D9ACA27b7A6AF0eaD56354D9EbA0Ffb9) |
 | VectorMeritRegistry deploy tx | [`0xd9ff…9834`](https://explorer.sepolia.mantle.xyz/tx/0xd9ff1370bdec67b8ff21de00567486b2f5d0a1a0bc2f20117f4be283d9bf9834) |
