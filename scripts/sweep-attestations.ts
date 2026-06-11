@@ -42,11 +42,14 @@ if (typeof DATABASE_URL !== 'string' || DATABASE_URL.length === 0) {
 const SWEEP_LIMIT = Number(process.env.SWEEP_LIMIT ?? 100);
 
 // Fail closed: the feedbackURI derived from this value is written immutably
-// on-chain, so a fallback (e.g. `https://localhost`) would permanently anchor
-// unreachable URIs.
+// on-chain (canonical ERC-8004 has no updateFeedback), so a fallback
+// (e.g. `https://localhost`) would permanently anchor unreachable URIs and
+// break every verifier's integrity check.
 const BASE_URL = process.env.PUBLIC_BASE_URL;
 if (typeof BASE_URL !== 'string' || BASE_URL.length === 0) {
-  throw new Error('PUBLIC_BASE_URL is required');
+  throw new Error(
+    'PUBLIC_BASE_URL is required: the on-chain feedbackURI is immutable, so it must point at the public deployment, not a localhost fallback',
+  );
 }
 
 const pool = new Pool({ connectionString: DATABASE_URL });
