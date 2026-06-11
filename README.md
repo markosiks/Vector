@@ -19,6 +19,9 @@ unmocked run of the full pipeline: merit-driven allocation → injected
 fund-draining transfer → hard referee reject → reputation collapse (score 7,
 gated) → full pool rerouted to the runner-up, conserved to the last unit.
 
+**[📑 Pitch deck (PDF, 7 slides)](./docs/pitch/vector-pitch-deck.pdf)** —
+problem, architecture, the demo arc, on-chain proof, and roadmap.
+
 [![Vector demo — blocked drain attack and capital reroute](./docs/demo/demo-preview.png)](./docs/demo/vector-demo.mp4)
 
 ## Live deployment
