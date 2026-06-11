@@ -27,21 +27,22 @@ export class ByrealParseError extends Error {
   }
 }
 
-const metaSchema = z
-  .object({ timestamp: z.string().optional(), version: z.string().optional() })
-  .passthrough();
+// B-07: strip unknown top-level keys instead of passing them through. The
+// parsed envelope is persisted verbatim in `executions.response_json`; a CLI
+// that prints an extra top-level field (e.g. an echoed credential) must not have
+// it carried into the database. Payload-bearing `data` stays `unknown` so the
+// genuine result is preserved; only unrecognized *envelope/meta/error* keys drop.
+const metaSchema = z.object({ timestamp: z.string().optional(), version: z.string().optional() });
 
-const errorSchema = z.object({ code: z.string(), message: z.string() }).passthrough();
+const errorSchema = z.object({ code: z.string(), message: z.string() });
 
 /** The validated envelope. `data` stays `unknown` — payload schemas live in `parse.ts`. */
-export const envelopeSchema = z
-  .object({
-    success: z.boolean(),
-    meta: metaSchema.optional(),
-    data: z.unknown().optional(),
-    error: errorSchema.optional(),
-  })
-  .passthrough();
+export const envelopeSchema = z.object({
+  success: z.boolean(),
+  meta: metaSchema.optional(),
+  data: z.unknown().optional(),
+  error: errorSchema.optional(),
+});
 
 export type ByrealEnvelope = z.infer<typeof envelopeSchema>;
 
@@ -49,19 +50,19 @@ export type ByrealEnvelope = z.infer<typeof envelopeSchema>;
 const ANSI = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PR-TZcf-ntqry=><]/g;
 
 /**
- * Extract the first balanced top-level JSON object from `text`, ignoring any
- * leading/trailing noise (a banner line, a trailing newline, a stray warning).
- * Returns the substring `{…}` or `null` when no balanced object is present.
- * String literals are scanned so a `}` inside a JSON string never closes early.
+ * Extract *every* balanced top-level JSON object from `text`, in order, ignoring
+ * any leading/trailing/interleaving noise (a banner line, a trailing newline, a
+ * stray warning, a JSON log line). String literals are scanned so a `}` inside a
+ * JSON string never closes a level early. An unbalanced/truncated tail yields no
+ * extra object.
  */
-function extractJsonObject(text: string): string | null {
-  const start = text.indexOf('{');
-  if (start === -1) return null;
-
+function extractJsonObjects(text: string): string[] {
+  const objects: string[] = [];
+  let start = -1;
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (let i = start; i < text.length; i += 1) {
+  for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
@@ -69,14 +70,20 @@ function extractJsonObject(text: string): string | null {
       else if (ch === '"') inString = false;
       continue;
     }
-    if (ch === '"') inString = true;
-    else if (ch === '{') depth += 1;
-    else if (ch === '}') {
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if (ch === '}' && depth > 0) {
       depth -= 1;
-      if (depth === 0) return text.slice(start, i + 1);
+      if (depth === 0 && start !== -1) {
+        objects.push(text.slice(start, i + 1));
+        start = -1;
+      }
     }
   }
-  return null; // Unbalanced — truncated output.
+  return objects;
 }
 
 /**
@@ -91,21 +98,35 @@ export function parseEnvelope(stdout: string): ByrealEnvelope {
     throw new ByrealParseError('byreal output exceeds size bound');
   }
 
-  const json = extractJsonObject(stdout.replace(ANSI, ''));
-  if (json === null) {
+  const candidates = extractJsonObjects(stdout.replace(ANSI, ''));
+  if (candidates.length === 0) {
     throw new ByrealParseError('byreal output contains no JSON object');
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(json);
-  } catch {
-    throw new ByrealParseError('byreal output is not valid JSON');
+  // B-06 (banner injection): collect *all* well-formed envelopes, not just the
+  // first balanced object. A non-envelope banner object (`{"debug":true}`) is
+  // skipped instead of aborting the parse. But the genuine CLI prints exactly
+  // one envelope, so if more than one envelope-shaped object appears we refuse
+  // to guess which is authoritative — a prepended/appended fake envelope must
+  // not be able to substitute a forged fill. Fail closed: the caller degrades to
+  // the deterministic seed fallback.
+  const envelopes: ByrealEnvelope[] = [];
+  for (const json of candidates) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(json);
+    } catch {
+      continue; // Not valid JSON (e.g. `{ not: json }`) — ignore this candidate.
+    }
+    const parsed = envelopeSchema.safeParse(raw);
+    if (parsed.success) envelopes.push(parsed.data);
   }
 
-  const parsed = envelopeSchema.safeParse(raw);
-  if (!parsed.success) {
+  if (envelopes.length === 0) {
     throw new ByrealParseError('byreal output is not a valid CLI envelope');
   }
-  return parsed.data;
+  if (envelopes.length > 1) {
+    throw new ByrealParseError('byreal output contains multiple CLI envelopes');
+  }
+  return envelopes[0] as ByrealEnvelope;
 }
