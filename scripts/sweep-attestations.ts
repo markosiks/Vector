@@ -40,7 +40,16 @@ if (typeof DATABASE_URL !== 'string' || DATABASE_URL.length === 0) {
 }
 
 const SWEEP_LIMIT = Number(process.env.SWEEP_LIMIT ?? 100);
-const BASE_URL = process.env.PUBLIC_BASE_URL ?? 'https://localhost';
+// The sweep writes `feedbackURI` permanently on-chain (canonical ERC-8004 has no
+// updateFeedback). A `https://localhost` fallback would bake an unreachable URI
+// into the chain forever, breaking every verifier's integrity check — so require
+// an explicit public base URL rather than silently defaulting.
+const BASE_URL = process.env.PUBLIC_BASE_URL;
+if (typeof BASE_URL !== 'string' || BASE_URL.length === 0) {
+  throw new Error(
+    'PUBLIC_BASE_URL is required: the on-chain feedbackURI is immutable, so it must point at the public deployment, not a localhost fallback',
+  );
+}
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const db = toQueryable(await pool.connect());
