@@ -21,6 +21,9 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // Don't advertise the framework in response headers.
+  poweredByHeader: false,
+
   async headers() {
     return [
       {
@@ -38,6 +41,27 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
+          },
+          {
+            // Second line of defence against XSS: no external scripts, no
+            // embedding, no plugins, forms/navigation stay same-origin.
+            // `'unsafe-inline'` for script/style is required by Next.js App
+            // Router (inline flight-data scripts and injected styles); a
+            // stricter nonce-based policy needs middleware and is out of
+            // scope here.
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data:",
+              "font-src 'self'",
+              "connect-src 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+            ].join('; '),
           },
         ],
       },
