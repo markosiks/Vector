@@ -14,3 +14,4 @@ export * from './scores';
 export * from './capital-allocations';
 export * from './attestations';
 export * from './kill-switch';
+export * from './operator-actions';
