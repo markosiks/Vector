@@ -52,4 +52,20 @@ describe('RateLimiter', () => {
     rl.prune(); // should not blow up and should keep 'keep' active
     expect(rl.check('keep')).toBe(true); // still within limit
   });
+
+  // Regression (F-01 leak): distinct keys whose hits have all expired must be
+  // reclaimed by the amortized sweep in `check`, not accumulate forever (the
+  // X-Forwarded-For spoofing DoS vector).
+  test('check() reclaims stale keys so the map stays bounded', async () => {
+    const rl = new RateLimiter({ limit: 5, windowMs: 10 });
+    // Burst of distinct keys within one window: all are retained.
+    for (let i = 0; i < 50; i++) rl.check(`ip-${i}`);
+    expect(rl.size()).toBe(50);
+    // Let the whole window lapse so every recorded hit is now stale.
+    await Bun.sleep(15);
+    // The next check triggers the once-per-window sweep, dropping all 50 stale
+    // entries; only the freshly-touched key remains.
+    rl.check('fresh');
+    expect(rl.size()).toBe(1);
+  });
 });
