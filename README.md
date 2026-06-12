@@ -8,10 +8,70 @@ ERC-8004 Reputation Registry on Mantle testnet. Demo rail: Byreal Perps CLI.
 The product is a deterministic 90-second arc: merit → blocked theft →
 reputation collapse → capital reroute.
 
-> **Stage P0.1 — App Skeleton & Seeded Config.** Foundation only: app skeleton,
-> DB client, env/secrets, SWR data layer, and the single immutable seeded config
-> that makes the demo deterministic. Scoring, referee and on-chain writes land
-> in later stages.
+Built for **Mantle: The Turing Test Hackathon 2026** — track *Agentic Wallets &
+Economy*.
+
+## The pipeline
+
+Vector is not three demos — it is one real, deterministic pipeline. The same
+referee, scoring and router used in production drive a frozen 90-second arc, so
+the demo is honest (no mocked verdicts) and reproducible (same seed ⇒
+byte-identical run).
+
+```
+signal → decide → intent → referee → execution → outcome
+                                                     │
+                                                   score (AgentScore 0–100)
+                                                     │
+                                       on-chain anchor (ERC-8004 on Mantle)
+                                                     │
+                                          capital re-route (pool conserved)
+```
+
+- **Referee (firewall).** A pure, deterministic gate over *typed, signed Intents*
+  (never prompts). A fixed, ordered rule set reduces each Intent to
+  `HALT/REJECT/CLIP/ALLOW`; blocking rules dominate soft clips. Rule #3
+  `fresh_wallet_transfer_block` rejects a drain to a non-whitelisted wallet
+  `hard` — the load-bearing security property. See [docs/referee.md](./docs/referee.md).
+- **AgentScore ∈ [0,100].** A pure scoring function whose *only* exposure input is
+  capital-at-risk (`car_r`), not trade count or volume — the structural root of
+  its anti-wash / anti-Sybil property. A confirmed drain floor-crashes the score.
+  See [docs/scoring.md](./docs/scoring.md).
+- **Reputation-weighted capital router.** Moves a fixed, *exactly conserved*
+  capital pool toward the highest scores in bounded, stable steps; a blocked
+  theft drains the offender and reroutes to the honest leaders. See
+  [docs/capital-router.md](./docs/capital-router.md).
+
+## On Mantle (on-chain)
+
+Per-round agent feedback is anchored on the **canonical ERC-8004 Reputation
+Registry** already deployed on **Mantle Sepolia** (`chainId 5003`). Vector reads/
+writes the shared singletons — it does not deploy its own.
+
+| Contract           | Address                                      |
+| ------------------ | -------------------------------------------- |
+| ReputationRegistry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| IdentityRegistry   | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+
+`giveFeedback(...)` is authorized by `msg.sender` (no off-chain signature); the
+feedback author must differ from the agent's owner/operator. See
+[docs/erc8004-registry.md](./docs/erc8004-registry.md).
+
+**Real venue, not a sim:** allowed Intents can settle on the real Byreal Perps
+testnet venue via the official `@byreal-io/byreal-perps-cli` — a real on-venue
+order id + PnL next to the demo. Byreal fills and the read-only Nansen
+smart-money signal are optional side-channels that **never** feed the
+deterministic scoring arc (default-off ⇒ byte-identical run). See
+[docs/byreal-rail.md](./docs/byreal-rail.md) and [docs/nansen-signal.md](./docs/nansen-signal.md).
+
+## Demo — the 90-second arc
+
+Two seed agents (`seed-leader`, `seed-2`). On the penultimate round an operator
+injects a fund-draining `transfer` from the leader → the referee blocks it →
+scoring crashes the leader → the router reroutes its capital to the honest
+runner-up, pool conserved to the last unit. Entry point `runArc(db, DEMO_ARC)`;
+determinism is pinned by golden + e2e + fuzz + integration tests. See
+[docs/demo-spine.md](./docs/demo-spine.md).
 
 ## Stack
 
@@ -48,6 +108,13 @@ bun run test:integration     # needs DATABASE_URL; run in its own process
 
 ## Docs
 
+- [docs/demo-spine.md](./docs/demo-spine.md) — the deterministic 90-second arc.
+- [docs/referee.md](./docs/referee.md) · [docs/scoring.md](./docs/scoring.md) ·
+  [docs/capital-router.md](./docs/capital-router.md) — the three core engines.
+- [docs/erc8004-registry.md](./docs/erc8004-registry.md) — on-chain ERC-8004
+  integration on Mantle Sepolia.
+- [docs/byreal-rail.md](./docs/byreal-rail.md) · [docs/nansen-signal.md](./docs/nansen-signal.md)
+  — the credibility rail and smart-money signal (optional side-channels).
 - [docs/config.md](./docs/config.md) — every constant, default and §ARCH ref.
 - [docs/env.md](./docs/env.md) — env variables, formats, secret handling.
 - [docs/adr/0001-…](./docs/adr/0001-seeded-config-and-swr-polling.md) — why one
