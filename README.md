@@ -464,6 +464,26 @@ cd contracts && forge test   # Solidity unit + fuzz
 | Browser | 4 | Playwright arena / credibility specs. |
 | Contracts | 34 | Foundry unit + fuzz for `VectorMeritRegistry`. |
 
+### Codebase at a glance
+
+Measured with [`cloc`](https://github.com/AlDanial/cloc), excluding vendored
+dependencies (OpenZeppelin, forge-std) and build output.
+
+| Area | Files | Code | Comments |
+|---|--:|--:|--:|
+| TypeScript — application & library | 184 | 11,486 | 5,955 |
+| Tests — TypeScript + Solidity | 155 | 16,411 | 1,940 |
+| Smart contracts — Solidity (`src`, `script`) | 2 | 100 | 74 |
+| Styles — CSS | 10 | 1,832 | 86 |
+| SQL migrations | 18 | 235 | 219 |
+| Documentation — Markdown | 25 | 2,927 | — |
+
+That is roughly **30,000 lines of source** (TypeScript, Solidity, CSS, SQL)
+across ~370 files, with **~8,300 comment lines** — about **21%** of the source.
+Test code slightly outweighs application code (**~1.4 : 1**), and the
+architecture docs add **~2,900 lines** of Markdown alongside a generated OpenAPI
+spec.
+
 A few conventions worth knowing before contributing:
 
 - **One source of truth for constants.** Add scoring/routing/timing values to
