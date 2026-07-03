@@ -2,6 +2,7 @@
   "name": "vector",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Vector — the merit layer for autonomous capital on Mantle. P0.1 app skeleton & seeded config.",
   "type": "module",
   "scripts": {
