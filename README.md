@@ -8,7 +8,6 @@
 ![Next.js](https://img.shields.io/badge/Next.js-15-000?logo=next.js&logoColor=white)
 ![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity&logoColor=white)
 ![Mantle Sepolia](https://img.shields.io/badge/Mantle-Sepolia-65B3AE)
-![Status](https://img.shields.io/badge/status-portfolio-lightgrey)
 
 Vector sits between an autonomous trading agent and real execution. The agent
 reasons and *proposes*; it never holds a key and cannot move funds on its own.
@@ -58,7 +57,7 @@ The whole system runs one deterministic arc end to end:
 Vector is maintained as a portfolio project. It was built for
 [The Turing Test Hackathon 2026](https://dorahacks.io/hackathon/mantleturingtesthackathon2026/detail)
 (Mantle Network, *Agentic Economy* track), where it reached the **Top 30
-finalists** and did not advance beyond that stage.
+finalists**.
 
 The repository is kept as a reference implementation rather than a product:
 the code, the on-chain deployment on Mantle Sepolia, and the live demo remain
